@@ -8,7 +8,6 @@
 import Foundation
 import NIO
 
-
 public typealias MQTTReceiver = (MQTTMessage) -> ()
 
 final class MQTTHandler: ChannelInboundHandler, RemovableChannelHandler {
@@ -16,8 +15,10 @@ final class MQTTHandler: ChannelInboundHandler, RemovableChannelHandler {
     public typealias OutboundOut = ByteBuffer
     private var receiver: MQTTReceiver? = nil
     public var promises = Dictionary<UInt16, EventLoopPromise<Void>>()
+    public var isConnected: Bool
 
     public init() {
+        isConnected = false
     }
     
     func setReceiver(receiver: @escaping MQTTReceiver) {
@@ -25,8 +26,8 @@ final class MQTTHandler: ChannelInboundHandler, RemovableChannelHandler {
     }
     
     public func channelActive(context: ChannelHandlerContext) {
-        print("Client connected to \(context.remoteAddress!)")
-        context.fireChannelActive()
+        print("MQTT Client connected to \(context.remoteAddress!)")
+        isConnected = true
     }
         
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -109,7 +110,8 @@ final class MQTTHandler: ChannelInboundHandler, RemovableChannelHandler {
     }
     
     public func handlerRemoved(context: ChannelHandlerContext) {
-        print("MQTT handler removed.")
+        print("MQTT Client disconnected from \(context.remoteAddress!)")
+        isConnected = false
     }
     
     public func errorCaught(context: ChannelHandlerContext, error: Error) {
