@@ -12,26 +12,26 @@ final class ZenMQTTTests: XCTestCase {
             print(message.stringRepresentation!)
         }
         
-        XCTAssertNoThrow(try mqtt.start().wait())
-        XCTAssertNoThrow(try mqtt.connect().wait())
-        XCTAssertNoThrow(try mqtt.subscribe(to: ["/topic/test1" : .atLeastOnce]).wait())
-        XCTAssertNoThrow(try mqtt.publish(
-            "Hello".data(using: .utf8)!,
-            in: "/topic/test1" ,
-            delivering: .atLeastOnce,
-            retain: false
-        ).wait())
-        sleep(1)
-        XCTAssertNoThrow(try mqtt.publish(
-            "Gerardo Grisolini".data(using: .utf8)!,
-            in: "/topic/test1" ,
-            delivering: .atLeastOnce,
-            retain: false
-        ).wait())
-        sleep(1)
-        XCTAssertNoThrow(try mqtt.unSubscribe(from: "/topic/test1").wait())
-        sleep(1)
-        XCTAssertNoThrow(try mqtt.disconnect().wait())
+        let topic = "TEST_DEVICE/6304039/PREVENTIVE_MAINTENANCE"
+        do {
+            try mqtt.start().wait()
+            try mqtt.connect().wait()
+            try mqtt.subscribe(to: [topic : .atLeastOnce]).wait()
+            sleep(1)
+            try mqtt.publish(
+                "Gerardo Grisolini".data(using: .utf8)!,
+                in: topic,
+                delivering: .atLeastOnce,
+                retain: false
+            ).wait()
+            sleep(3)
+            try mqtt.unSubscribe(from: topic).wait()
+            sleep(1)
+            try mqtt.disconnect().wait()
+            sleep(1)
+        } catch {
+            XCTFail(error.localizedDescription)
+        }
         mqtt.stop()
     }
 
