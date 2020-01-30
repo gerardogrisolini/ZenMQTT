@@ -145,11 +145,11 @@ public class ZenMQTT {
         return send(promiseId: msgID, packet: subscribePacket)
     }
 
-    public func unSubscribe(from topic: String) -> EventLoopFuture<Void> {
-        return unSubscribe(from: [topic])
+    public func unsubscribe(from topic: String) -> EventLoopFuture<Void> {
+        return unsubscribe(from: [topic])
     }
     
-    public func unSubscribe(from topics: [String]) -> EventLoopFuture<Void> {
+    public func unsubscribe(from topics: [String]) -> EventLoopFuture<Void> {
         let msgID = nextMessageID()
         let unSubPacket = MQTTUnsubPacket(topics: topics, messageID: msgID)
         return send(promiseId: msgID, packet: unSubPacket)

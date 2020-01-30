@@ -38,7 +38,7 @@ try mqtt.subscribe(to: ["/topic/test1" : .atLeastOnce]).wait()
 
 #### Unsubscibe topic
 ```
-try mqtt.unSubscribe(from: "/topic/test1").wait()
+try mqtt.unsubscribe(from: "/topic/test1").wait()
 ```
 
 #### Publish message
@@ -58,5 +58,5 @@ try mqtt.disconnect().wait()
 
 #### Stop client
 ```
-mqtt.stop()
+try mqtt.stop().wait()
 ```

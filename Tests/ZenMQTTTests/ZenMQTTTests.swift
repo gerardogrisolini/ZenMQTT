@@ -33,7 +33,7 @@ final class ZenMQTTTests: XCTestCase {
                 retain: false
             ).wait()
             sleep(3)
-            try mqtt.unSubscribe(from: topic).wait()
+            try mqtt.unsubscribe(from: topic).wait()
             try mqtt.disconnect().wait()
             try mqtt.stop().wait()
         } catch {
