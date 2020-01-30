@@ -110,7 +110,7 @@ final class MQTTHandler: ChannelInboundHandler, RemovableChannelHandler {
     }
     
     public func handlerRemoved(context: ChannelHandlerContext) {
-        print("MQTT Client disconnected")
+        print("MQTT handler removed.")
         isConnected = false
     }
     
