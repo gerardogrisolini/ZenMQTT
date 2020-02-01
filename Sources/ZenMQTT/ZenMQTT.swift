@@ -23,7 +23,7 @@ public class ZenMQTT {
     public let clientID: String
     public let cleanSession: Bool
     public var keepAlive: UInt16 = 0
-    public var onMessage: MQTTReceiver = { _ in }
+    public var onMessage: MQTTReceiver? = nil
 
     public var lastWillMessage: MQTTPubMsg?
     public var isConnected: Bool { return handler.isConnected }
@@ -59,7 +59,7 @@ public class ZenMQTT {
     public func start(keepAlive: UInt16 = 0) -> EventLoopFuture<Void> {
         self.keepAlive = keepAlive
         
-        handler.setReceiver(receiver: onMessage)
+        handler.receiver = onMessage
         
         return ClientBootstrap(group: eventLoopGroup)
             // Enable SO_REUSEADDR.

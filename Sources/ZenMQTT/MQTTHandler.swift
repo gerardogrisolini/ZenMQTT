@@ -13,16 +13,12 @@ public typealias MQTTReceiver = (MQTTMessage) -> ()
 final class MQTTHandler: ChannelInboundHandler, RemovableChannelHandler {
     public typealias InboundIn = ByteBuffer
     public typealias OutboundOut = ByteBuffer
-    private var receiver: MQTTReceiver? = nil
+    public var receiver: MQTTReceiver? = nil
     public var promises = Dictionary<UInt16, EventLoopPromise<Void>>()
     public var isConnected: Bool
 
     public init() {
         isConnected = false
-    }
-    
-    func setReceiver(receiver: @escaping MQTTReceiver) {
-        self.receiver = receiver
     }
     
     public func channelActive(context: ChannelHandlerContext) {
