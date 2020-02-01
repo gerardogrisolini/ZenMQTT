@@ -42,7 +42,6 @@ class MQTTPublishPacket: MQTTPacket {
     }
     
     init(header: MQTTPacketFixedHeader, networkData: Data) {
-        
         let topicLength = 256 * Int(networkData[0]) + Int(networkData[1])
         let topicData = networkData.subdata(in: 2..<topicLength+2)
         let topic = String(data: topicData, encoding: .utf8)!

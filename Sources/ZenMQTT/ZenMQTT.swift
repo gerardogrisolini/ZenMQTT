@@ -23,10 +23,11 @@ public class ZenMQTT {
     public let clientID: String
     public let cleanSession: Bool
     public var keepAlive: UInt16 = 0
-    public var onMessage: MQTTReceiver? = nil
+    public var onMessageReceived: MQTTMessageReceived? = nil
+    public var onHandlerRemoved: MQTTHandlerRemoved? = nil
 
     public var lastWillMessage: MQTTPubMsg?
-    public var isConnected: Bool { return handler.isConnected }
+    //public var isConnected: Bool { return handler.isConnected }
 
     public init(
         host: String,
@@ -59,7 +60,14 @@ public class ZenMQTT {
     public func start(keepAlive: UInt16 = 0) -> EventLoopFuture<Void> {
         self.keepAlive = keepAlive
         
-        handler.receiver = onMessage
+        handler.messageReceived = onMessageReceived
+        handler.handlerRemoved = onHandlerRemoved
+
+        let handlers: [ChannelHandler] = [
+            MessageToByteHandler(MQTTPacketEncoder()),
+            ByteToMessageHandler(MQTTPacketDecoder()),
+            handler
+        ]
         
         return ClientBootstrap(group: eventLoopGroup)
             // Enable SO_REUSEADDR.
@@ -68,10 +76,10 @@ public class ZenMQTT {
             .channelInitializer { channel in
                 if let ssl = self.sslClientHandler {
                     return channel.pipeline.addHandler(ssl).flatMap { () -> EventLoopFuture<Void> in
-                        channel.pipeline.addHandler(self.handler)
+                        channel.pipeline.addHandlers(handlers)
                     }
                 } else {
-                    return channel.pipeline.addHandler(self.handler)
+                    return channel.pipeline.addHandlers(handlers)
                 }
             }
             .connect(host: host, port: port)
@@ -89,18 +97,15 @@ public class ZenMQTT {
     }
         
     private func send(promiseId: UInt16, packet: MQTTPacket) -> EventLoopFuture<Void> {
-        var buffer = channel.allocator.buffer(capacity: packet.networkPacket().count)
-        buffer.writeBytes(packet.networkPacket())
-
         if promiseId > 0 {
             let promise = channel.eventLoop.makePromise(of: Void.self)
             handler.promises[promiseId] = promise
             
-            return channel.writeAndFlush(buffer).flatMap { () -> EventLoopFuture<Void> in
+            return channel.writeAndFlush(packet).flatMap { () -> EventLoopFuture<Void> in
                 promise.futureResult
             }
         } else {
-            return channel.writeAndFlush(buffer)
+            return channel.writeAndFlush(packet)
         }
     }
     

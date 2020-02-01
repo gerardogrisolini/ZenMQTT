@@ -8,111 +8,77 @@
 import Foundation
 import NIO
 
-public typealias MQTTReceiver = (MQTTMessage) -> ()
+public typealias MQTTMessageReceived = (MQTTMessage) -> ()
+public typealias MQTTHandlerRemoved = (Bool) -> ()
 
 final class MQTTHandler: ChannelInboundHandler, RemovableChannelHandler {
-    public typealias InboundIn = ByteBuffer
-    public typealias OutboundOut = ByteBuffer
-    public var receiver: MQTTReceiver? = nil
+    public typealias InboundIn = MQTTPacket
+    public typealias OutboundOut = MQTTPacket
+    
+    private var isConnected: Bool = false
+    public var messageReceived: MQTTMessageReceived? = nil
+    public var handlerRemoved: MQTTHandlerRemoved? = nil
     public var promises = Dictionary<UInt16, EventLoopPromise<Void>>()
-    public var isConnected: Bool
 
     public init() {
-        isConnected = false
     }
     
     public func channelActive(context: ChannelHandlerContext) {
-        print("MQTT Client connected to \(context.remoteAddress!)")
+        debugPrint("MQTT Client connected to \(context.remoteAddress!)")
         isConnected = true
     }
         
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
-        let buffer = self.unwrapInboundIn(data)
+        let packet = self.unwrapInboundIn(data)
         
-        if let packet = parse(buffer) {
-            switch packet {
-            case let connAckPacket as MQTTConnAckPacket:
-                if let promise = promises[1] {
-                    if connAckPacket.response == .connectionAccepted {
-                        promise.succeed(())
-                    } else {
-                        promise.fail(MQTTSessionError.connectionError(connAckPacket.response))
-                    }
-                    promises.removeValue(forKey: 1)
-                }
-            case let subAckPacket as MQTTSubAckPacket:
-                if let promise = promises[subAckPacket.messageID] {
+        switch packet {
+        case let connAckPacket as MQTTConnAckPacket:
+            if let promise = promises[1] {
+                if connAckPacket.response == .connectionAccepted {
                     promise.succeed(())
-                    promises.removeValue(forKey: subAckPacket.messageID)
+                } else {
+                    promise.fail(MQTTSessionError.connectionError(connAckPacket.response))
                 }
-            case let unSubAckPacket as MQTTUnSubAckPacket:
-                if let promise = promises[unSubAckPacket.messageID] {
-                    promise.succeed(())
-                    promises.removeValue(forKey: unSubAckPacket.messageID)
-                }
-            case let pubAck as MQTTPubAck:
-                if let promise = promises[pubAck.messageID] {
-                    promise.succeed(())
-                    promises.removeValue(forKey: pubAck.messageID)
-                }
-            case let publishPacket as MQTTPublishPacket:
-                sendPubAck(for: publishPacket.messageID, context: context)
-                guard let receiver = receiver else { return }
-                let message = MQTTMessage(publishPacket: publishPacket)
-                receiver(message)
-            default:
-                if let response = String(bytes: packet.payload(), encoding: .utf8) {
-                    debugPrint(response)
-                }
+                promises.removeValue(forKey: 1)
+            }
+        case let subAckPacket as MQTTSubAckPacket:
+            if let promise = promises[subAckPacket.messageID] {
+                promise.succeed(())
+                promises.removeValue(forKey: subAckPacket.messageID)
+            }
+        case let unSubAckPacket as MQTTUnSubAckPacket:
+            if let promise = promises[unSubAckPacket.messageID] {
+                promise.succeed(())
+                promises.removeValue(forKey: unSubAckPacket.messageID)
+            }
+        case let pubAck as MQTTPubAck:
+            if let promise = promises[pubAck.messageID] {
+                promise.succeed(())
+                promises.removeValue(forKey: pubAck.messageID)
+            }
+        case let publishPacket as MQTTPublishPacket:
+            guard let messageReceived = messageReceived else { return }
+            let message = MQTTMessage(publishPacket: publishPacket)
+            messageReceived(message)
+            
+            let pubAck = MQTTPubAck(messageID: publishPacket.messageID)
+            context.write(self.wrapOutboundOut(pubAck), promise: nil)
+        default:
+            if let payload = String(bytes: packet.payload(), encoding: .utf8) {
+                debugPrint(payload)
             }
         }
-        else if let bytes = buffer.getBytes(at: 0, length: buffer.readableBytes),
-            let response = String(bytes: bytes, encoding: .utf8) {
-            debugPrint(response)
-        }
-    }
-    
-    func parse(_ buffer: ByteBuffer) -> MQTTPacket? {
-        var headerByte: UInt8 = 0
-        headerByte = buffer.getBytes(at: 0, length: 1)![0]
-        let len = buffer.getBytes(at: 1, length: 1)![0]
-        guard len > 0 else { return nil }
-
-        let header = MQTTPacketFixedHeader(networkByte: headerByte)
-        let body = Data(buffer.getBytes(at: 2, length: buffer.readableBytes - 2)!)
-        
-        switch header.packetType {
-            case .connAck:
-                return MQTTConnAckPacket(header: header, networkData: body)
-            case .subAck:
-                return MQTTSubAckPacket(header: header, networkData: body)
-            case .unSubAck:
-                return MQTTUnSubAckPacket(header: header, networkData: body)
-            case .pubRec, .pubAck:
-                return MQTTPubAck(header: header, networkData: body)
-            case .publish:
-                return MQTTPublishPacket(header: header, networkData: body)
-            case .pingResp:
-                return MQTTPingResp(header: header)
-            default:
-                return nil
-        }
-    }
-    
-    private func sendPubAck(for messageId: UInt16, context: ChannelHandlerContext) {
-        let pubAck = MQTTPubAck(messageID: messageId)
-        var buffer = context.channel.allocator.buffer(capacity: pubAck.networkPacket().count)
-        buffer.writeBytes(pubAck.networkPacket())
-        context.channel.writeAndFlush(buffer, promise: nil)
     }
     
     public func handlerRemoved(context: ChannelHandlerContext) {
-        print("MQTT handler removed.")
+        debugPrint("MQTT handler removed.")
+        guard let handlerRemoved = handlerRemoved else { return }
+        handlerRemoved(isConnected)
         isConnected = false
     }
     
     public func errorCaught(context: ChannelHandlerContext, error: Error) {
-        print("error: ", error)
+        debugPrint("MQTT handler error: ", error)
         // As we are not really interested getting notified on success or failure
         // we just pass nil as promise to reduce allocations.
         context.close(promise: nil)
