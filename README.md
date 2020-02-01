@@ -16,14 +16,16 @@ import ZenMQTT
 
 let mqtt = ZenMQTT(host: "test.mosquitto.org", port: 1883)
 try mqtt.addTLS(cert: "certificate.crt", key: "private.key")
-mqtt.onMessage = { message in
+mqtt.onMessageReceived = { message in
     print(message.stringRepresentation!)
 }
-```
+mqtt.onHandlerRemoved = {
+    print("Handler removed")
+}
+mqtt.onErrorCaught = { error in
+    print(error.localizedDescription)
+}
 
-#### Start client
-```
-try mqtt.start().wait()
 ```
 
 #### Connect to server
@@ -54,9 +56,4 @@ try mqtt.publish(
 #### Disconnect client
 ```
 try mqtt.disconnect().wait()
-```
-
-#### Stop client
-```
-try mqtt.stop().wait()
 ```
