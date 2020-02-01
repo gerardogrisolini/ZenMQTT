@@ -61,18 +61,19 @@ final class MQTTHandler: ChannelInboundHandler, RemovableChannelHandler {
                 }
             case let publishPacket as MQTTPublishPacket:
                 sendPubAck(for: publishPacket.messageID, context: context)
+                guard let receiver = receiver else { return }
                 let message = MQTTMessage(publishPacket: publishPacket)
-                receiver?(message)
+                receiver(message)
             default:
                 if let response = String(bytes: packet.payload(), encoding: .utf8) {
-                    print(response)
+                    debugPrint(response)
                 }
             }
         }
-//        else if let bytes = buffer.getBytes(at: 0, length: buffer.readableBytes),
-//            let response = String(bytes: bytes, encoding: .utf8) {
-//            print(response)
-//        }
+        else if let bytes = buffer.getBytes(at: 0, length: buffer.readableBytes),
+            let response = String(bytes: bytes, encoding: .utf8) {
+            debugPrint(response)
+        }
     }
     
     func parse(_ buffer: ByteBuffer) -> MQTTPacket? {
