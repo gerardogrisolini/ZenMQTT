@@ -22,12 +22,10 @@ public class ZenMQTT {
     public let port: Int
     public let clientID: String
     public let cleanSession: Bool
-    public var keepAlive: UInt16 = 0
+    public var lastWillMessage: MQTTPubMsg?
     public var onMessageReceived: MQTTMessageReceived? = nil
     public var onHandlerRemoved: MQTTHandlerRemoved? = nil
-
-    public var lastWillMessage: MQTTPubMsg?
-    //public var isConnected: Bool { return handler.isConnected }
+    public var onErrorCaught: MQTTErrorCaught? = nil
 
     public init(
         host: String,
@@ -57,11 +55,11 @@ public class ZenMQTT {
         sslClientHandler = try NIOSSLClientHandler(context: sslContext, serverHostname: host)
     }
 
-    public func start(keepAlive: UInt16 = 0) -> EventLoopFuture<Void> {
-        self.keepAlive = keepAlive
+    private func start() -> EventLoopFuture<Void> {
         
         handler.messageReceived = onMessageReceived
         handler.handlerRemoved = onHandlerRemoved
+        handler.errorCaught = onErrorCaught
 
         let handlers: [ChannelHandler] = [
             MessageToByteHandler(MQTTPacketEncoder()),
@@ -85,18 +83,19 @@ public class ZenMQTT {
             .connect(host: host, port: port)
             .map { channel -> () in
                 self.channel = channel
-                if keepAlive > 0 {
-                    self.ping(time: TimeAmount.seconds(Int64(keepAlive)))
-                }
             }
     }
     
-    public func stop() -> EventLoopFuture<Void> {
+    private func stop() -> EventLoopFuture<Void> {
         channel.flush()
-        return channel.close()
+        return channel.close(mode: .all)
     }
         
     private func send(promiseId: UInt16, packet: MQTTPacket) -> EventLoopFuture<Void> {
+        if !channel.isActive {
+            return channel.eventLoop.makeFailedFuture(MQTTSessionError.socketError)
+        }
+        
         if promiseId > 0 {
             let promise = channel.eventLoop.makePromise(of: Void.self)
             handler.promises[promiseId] = promise
@@ -109,24 +108,31 @@ public class ZenMQTT {
         }
     }
     
-    
-    public func connect(username: String? = nil, password: String? = nil) -> EventLoopFuture<Void> {
-        let connectPacket = MQTTConnectPacket(clientID: clientID, cleanSession: cleanSession, keepAlive: keepAlive)
-        
-        // Set Optional vars
-        connectPacket.username = username
-        connectPacket.password = password
-        connectPacket.lastWillMessage = lastWillMessage
+    public func connect(username: String? = nil, password: String? = nil, keepAlive: UInt16 = 0) -> EventLoopFuture<Void> {
+        return start().flatMap { () -> EventLoopFuture<Void> in
+            let connectPacket = MQTTConnectPacket(clientID: self.clientID, cleanSession: self.cleanSession, keepAlive: keepAlive)
+            
+            // Set Optional vars
+            connectPacket.username = username
+            connectPacket.password = password
+            connectPacket.lastWillMessage = self.lastWillMessage
 
-        return send(promiseId: 1, packet: connectPacket)
+            return self.send(promiseId: 1, packet: connectPacket).map { () -> () in
+                self.ping(time: TimeAmount.seconds(Int64(keepAlive)))
+            }
+        }
     }
 
     public func disconnect() -> EventLoopFuture<Void> {
         let disconnectPacket = MQTTDisconnectPacket()
-        return send(promiseId: 0, packet: disconnectPacket)
+        return send(promiseId: 0, packet: disconnectPacket).flatMap { () -> EventLoopFuture<Void> in
+            return self.stop()
+        }
     }
-    
+        
     private func ping(time: TimeAmount) {
+        if time.nanoseconds == 0 { return }
+        
         channel.eventLoop.scheduleRepeatedAsyncTask(initialDelay: time, delay: time) { task -> EventLoopFuture<Void> in
             let mqttPingReq = MQTTPingPacket()
             return self.send(promiseId: 0, packet: mqttPingReq)

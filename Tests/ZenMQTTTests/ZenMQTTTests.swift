@@ -15,35 +15,37 @@ final class ZenMQTTTests: XCTestCase {
     }
     
     func testExample() {
-        let mqtt = ZenMQTT(host: "test.mosquitto.org", port: 1883, clientID: "Jerry_\(Date())", cleanSession: true, eventLoopGroup: eventLoopGroup)
+        let mqtt = ZenMQTT(host: "test.mosquitto.org", port: 1883, clientID: "test_\(Date())", cleanSession: true, eventLoopGroup: eventLoopGroup)
         
         mqtt.onMessageReceived = { message in
             print(message.stringRepresentation!)
         }
         
-        mqtt.onHandlerRemoved = { isConnected in
-            print("onHandlerRemoved: \(isConnected)")
+        mqtt.onHandlerRemoved = {
+            print("Handler removed")
+        }
+
+        mqtt.onErrorCaught = { error in
+            print(error.localizedDescription)
         }
         
         do {
-            try mqtt.start().wait()
             try mqtt.connect().wait()
             
             let topic = "VIET_DEVICE/6304039/PREVENTIVE_MAINTENANCE"
             try mqtt.subscribe(to: [topic : .atLeastOnce]).wait()
-//            try mqtt.publish(
-//                "Gerardo Grisolini".data(using: .utf8)!,
-//                in: topic,
-//                delivering: .atLeastOnce,
-//                retain: false
-//            ).wait()
-            sleep(30)
+            sleep(3)
+            try mqtt.publish(
+                "Hello world!".data(using: .utf8)!,
+                in: topic,
+                delivering: .atLeastOnce,
+                retain: false
+            ).wait()
+            sleep(20)
             try mqtt.unsubscribe(from: topic).wait()
-            
             try mqtt.disconnect().wait()
-            try mqtt.stop().wait()
         } catch {
-            XCTFail(error.localizedDescription)
+            XCTFail("\(error)")
         }
     }
 

@@ -9,15 +9,16 @@ import Foundation
 import NIO
 
 public typealias MQTTMessageReceived = (MQTTMessage) -> ()
-public typealias MQTTHandlerRemoved = (Bool) -> ()
+public typealias MQTTHandlerRemoved = () -> ()
+public typealias MQTTErrorCaught = (Error) -> ()
 
 final class MQTTHandler: ChannelInboundHandler, RemovableChannelHandler {
     public typealias InboundIn = MQTTPacket
     public typealias OutboundOut = MQTTPacket
     
-    private var isConnected: Bool = false
     public var messageReceived: MQTTMessageReceived? = nil
     public var handlerRemoved: MQTTHandlerRemoved? = nil
+    public var errorCaught: MQTTErrorCaught? = nil
     public var promises = Dictionary<UInt16, EventLoopPromise<Void>>()
 
     public init() {
@@ -25,7 +26,6 @@ final class MQTTHandler: ChannelInboundHandler, RemovableChannelHandler {
     
     public func channelActive(context: ChannelHandlerContext) {
         debugPrint("MQTT Client connected to \(context.remoteAddress!)")
-        isConnected = true
     }
         
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -57,30 +57,28 @@ final class MQTTHandler: ChannelInboundHandler, RemovableChannelHandler {
                 promises.removeValue(forKey: pubAck.messageID)
             }
         case let publishPacket as MQTTPublishPacket:
-            guard let messageReceived = messageReceived else { return }
-            let message = MQTTMessage(publishPacket: publishPacket)
-            messageReceived(message)
-            
-            let pubAck = MQTTPubAck(messageID: publishPacket.messageID)
-            context.write(self.wrapOutboundOut(pubAck), promise: nil)
-        default:
-            if let payload = String(bytes: packet.payload(), encoding: .utf8) {
-                debugPrint(payload)
+            if publishPacket.messageID > 0 {
+                let pubAck = MQTTPubAck(messageID: publishPacket.messageID)
+                context.writeAndFlush(self.wrapOutboundOut(pubAck), promise: nil)
             }
+            if let messageReceived = messageReceived {
+                let message = MQTTMessage(publishPacket: publishPacket)
+                messageReceived(message)
+            }
+        default:
+            break
         }
     }
     
     public func handlerRemoved(context: ChannelHandlerContext) {
-        debugPrint("MQTT handler removed.")
         guard let handlerRemoved = handlerRemoved else { return }
-        handlerRemoved(isConnected)
-        isConnected = false
+        handlerRemoved()
     }
     
     public func errorCaught(context: ChannelHandlerContext, error: Error) {
-        debugPrint("MQTT handler error: ", error)
-        // As we are not really interested getting notified on success or failure
-        // we just pass nil as promise to reduce allocations.
         context.close(promise: nil)
+
+        guard let errorCaught = errorCaught else { return }
+        errorCaught(error)
     }
 }
