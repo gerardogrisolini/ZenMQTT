@@ -32,17 +32,20 @@ final class ZenMQTTTests: XCTestCase {
         do {
             try mqtt.connect().wait()
             
-            let topic = "VIET_DEVICE/6304039/PREVENTIVE_MAINTENANCE"
-            try mqtt.subscribe(to: [topic : .atLeastOnce]).wait()
+            let topic1 = "test/topic1"
+            let topic2 = "test/topic2"
+            try mqtt.subscribe(to: [topic1 : .atLeastOnce, topic2 : .atLeastOnce]).wait()
+            
             sleep(3)
-            try mqtt.publish(
-                "Hello world!".data(using: .utf8)!,
-                in: topic,
-                delivering: .atLeastOnce,
-                retain: false
-            ).wait()
-            sleep(20)
-            try mqtt.unsubscribe(from: topic).wait()
+            let message1 = MQTTPubMsg(topic: topic1, payload: "Hello world!".data(using: .utf8)!, retain: false, QoS: .atLeastOnce)
+            try mqtt.publish(message: message1).wait()
+
+            sleep(3)
+            let message2 = MQTTPubMsg(topic: topic2, payload: "Gerardo Grisolini".data(using: .utf8)!, retain: false, QoS: .atLeastOnce)
+            try mqtt.publish(message: message2).wait()
+            
+            sleep(3)
+            try mqtt.unsubscribe(from: [topic1, topic2]).wait()
             try mqtt.disconnect().wait()
         } catch {
             XCTFail("\(error)")

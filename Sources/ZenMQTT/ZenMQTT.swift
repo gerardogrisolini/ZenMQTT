@@ -139,10 +139,9 @@ public class ZenMQTT {
         }
     }
     
-    public func publish(_ data: Data, in topic: String, delivering qos: MQTTQoS, retain: Bool) -> EventLoopFuture<Void> {
+    public func publish(message: MQTTPubMsg) -> EventLoopFuture<Void> {
         let msgID = nextMessageID()
-        let pubMsg = MQTTPubMsg(topic: topic, payload: data, retain: retain, QoS: qos)
-        let publishPacket = MQTTPublishPacket(messageID: msgID, message: pubMsg)
+        let publishPacket = MQTTPublishPacket(messageID: msgID, message: message)
         return send(promiseId: msgID, packet: publishPacket)
     }
 
