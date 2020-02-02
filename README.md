@@ -18,7 +18,13 @@ import ZenMQTT
 let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: System.coreCount)
 defer { try! eventLoopGroup.syncShutdownGracefully() }
 
-let mqtt = ZenMQTT(host: "test.mosquitto.org", port: 1883, clientID: "zen-mqtt-test", eventLoopGroup: eventLoopGroup)
+let mqtt = ZenMQTT(
+    host: "test.mosquitto.org",
+    port: 1883,
+    clientID: "zen-mqtt-test",
+    cleanSession: true,
+    eventLoopGroup: eventLoopGroup
+)
 try mqtt.addTLS(cert: "certificate.crt", key: "private.key")
 mqtt.onMessageReceived = { message in
     print(message.stringRepresentation!)
