@@ -19,8 +19,6 @@ let package = Package(
             name: "ZenMQTT",
             dependencies: [
                 "NIO",
-                "NIOHTTP1",
-                "NIOWebSocket",
                 "NIOSSL"
             ]
         ),

@@ -60,30 +60,6 @@ public final class MQTTPacketDecoder: ByteToMessageDecoder {
 }
 
 extension ByteBuffer {
-    enum Error: Swift.Error {
-        case readFailed(fromBuffer: String, ofType: String)
-    }
-    
-    mutating func readEncodedString() throws -> String {
-        guard let length: UInt16 = readInteger() else {
-            throw Error.readFailed(fromBuffer: description, ofType: "UInt16")
-        }
-        
-        guard let string = readString(length: Int(length)) else {
-            throw Error.readFailed(fromBuffer: description, ofType: "String of length \(length)")
-        }
-        
-        return string
-    }
-    
-    mutating func readInteger<T: FixedWidthInteger>(endianness: Endianness = .big, as: T.Type = T.self) throws -> T {
-        guard let integer = readInteger(endianness: endianness, as: `as`) else {
-            throw Error.readFailed(fromBuffer: description, ofType: "\(T.self)")
-        }
-        
-        return integer
-    }
-    
     func getRemainingLength(at newReaderIndex: Int) throws -> (count: UInt8, length: Int) {
         var multiplier: UInt32 = 1
         var value: Int = 0
@@ -91,28 +67,21 @@ extension ByteBuffer {
         var currentIndex = newReaderIndex
         repeat {
             guard currentIndex != (readableBytes + 1) else { throw RemainingLengthError.incomplete }
-            
+
             guard multiplier <= (128 * 128 * 128) else { throw RemainingLengthError.malformed }
-            
+
             guard let nextByte: UInt8 = getInteger(at: currentIndex) else { throw RemainingLengthError.incomplete }
-            
+
             byte = nextByte
-            
+
             value += Int(UInt32(byte & 127) * multiplier)
             multiplier *= 128
             currentIndex += 1
         } while ((byte & 128) != 0)// && !isEmpty
-        
+
         return (count: UInt8(currentIndex - newReaderIndex), length: value)
     }
-    
-    mutating func readRemainingLength() throws -> Int {
-        let (count, length) = try getRemainingLength(at: readerIndex)
-        moveReaderIndex(forwardBy: Int(count))
-        
-        return length
-    }
-    
+
     func readPackedLength() -> Int? {
         var multiplier = 1
         var length = 0
