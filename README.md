@@ -45,12 +45,8 @@ try mqtt.unsubscribe(from: "/topic/test1").wait()
 
 #### Publish message
 ```
-try mqtt.publish(
-    "Hello World!".data(using: .utf8)!,
-    in: "/topic/test1" ,
-    delivering: .atLeastOnce,
-    retain: false
-).wait()
+let message = MQTTPubMsg(topic: "/topic/test1", payload: "Hello World!".data(using: .utf8)!, retain: false, QoS: .atLeastOnce)
+try mqtt.publish(message: message).wait()
 ```
 
 #### Disconnect client
