@@ -6,7 +6,7 @@
 
 ```
 dependencies: [
-    .package(url: "https://github.com/gerardogrisolini/ZenMQTT.git", from: "1.0.0")
+    .package(url: "https://github.com/gerardogrisolini/ZenMQTT.git", from: "1.0.6")
 ]
 ```
 
