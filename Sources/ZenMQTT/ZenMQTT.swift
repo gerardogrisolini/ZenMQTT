@@ -14,7 +14,7 @@ import NIOSSL
 public class ZenMQTT {
 	
     private let eventLoopGroup: EventLoopGroup
-    private var channel: Channel!
+    private var channel: Channel? = nil
     private var sslClientHandler: NIOSSLClientHandler? = nil
     private let handler = MQTTHandler()
     
@@ -87,15 +87,19 @@ public class ZenMQTT {
     }
     
     private func stop() -> EventLoopFuture<Void> {
+        guard let channel = channel else {
+            return eventLoopGroup.next().makeFailedFuture(MQTTSessionError.socketError)
+        }
+        
         channel.flush()
         return channel.close(mode: .all)
     }
         
     private func send(promiseId: UInt16, packet: MQTTPacket) -> EventLoopFuture<Void> {
-        if !channel.isActive {
-            return channel.eventLoop.makeFailedFuture(MQTTSessionError.socketError)
+        guard let channel = channel else {
+            return eventLoopGroup.next().makeFailedFuture(MQTTSessionError.socketError)
         }
-        
+
         if promiseId > 0 {
             let promise = channel.eventLoop.makePromise(of: Void.self)
             handler.promises[promiseId] = promise
@@ -133,7 +137,7 @@ public class ZenMQTT {
     private func ping(time: TimeAmount) {
         if time.nanoseconds == 0 { return }
         
-        channel.eventLoop.scheduleRepeatedAsyncTask(initialDelay: time, delay: time) { task -> EventLoopFuture<Void> in
+        eventLoopGroup.next().scheduleRepeatedAsyncTask(initialDelay: time, delay: time) { task -> EventLoopFuture<Void> in
             let mqttPingReq = MQTTPingPacket()
             return self.send(promiseId: 0, packet: mqttPingReq)
         }
