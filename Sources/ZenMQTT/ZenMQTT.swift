@@ -18,11 +18,14 @@ public class ZenMQTT {
     private var sslClientHandler: NIOSSLClientHandler? = nil
     private let handler = MQTTHandler()
     
-    public let host: String
-    public let port: Int
-    public let clientID: String
-    public let cleanSession: Bool
-    public var lastWillMessage: MQTTPubMsg?
+    private let host: String
+    private let port: Int
+    private let clientID: String
+    private let autoReconnect: Bool
+    private var username: String?
+    private var password: String?
+    private var keepAlive: UInt16 = 0
+    private var lastWillMessage: MQTTPubMsg? = nil
     public var onMessageReceived: MQTTMessageReceived? = nil
     public var onHandlerRemoved: MQTTHandlerRemoved? = nil
     public var onErrorCaught: MQTTErrorCaught? = nil
@@ -31,13 +34,13 @@ public class ZenMQTT {
         host: String,
         port: Int,
         clientID: String,
-        cleanSession: Bool,
+        autoReconnect: Bool,
         eventLoopGroup: EventLoopGroup)
     {
         self.host = host
         self.port = port
         self.clientID = clientID
-        self.cleanSession = cleanSession
+        self.autoReconnect = autoReconnect
         self.eventLoopGroup = eventLoopGroup
     }
 
@@ -56,11 +59,7 @@ public class ZenMQTT {
     }
 
     private func start() -> EventLoopFuture<Void> {
-        
-        handler.messageReceived = onMessageReceived
-        handler.handlerRemoved = onHandlerRemoved
-        handler.errorCaught = onErrorCaught
-
+                
         let handlers: [ChannelHandler] = [
             MessageToByteHandler(MQTTPacketEncoder()),
             ByteToMessageHandler(MQTTPacketDecoder()),
@@ -112,19 +111,38 @@ public class ZenMQTT {
         }
     }
     
-    public func connect(username: String? = nil, password: String? = nil, keepAlive: UInt16 = 0) -> EventLoopFuture<Void> {
+    fileprivate func startAndConnect(cleanSession: Bool) -> EventLoopFuture<Void> {
         return start().flatMap { () -> EventLoopFuture<Void> in
-            let connectPacket = MQTTConnectPacket(clientID: self.clientID, cleanSession: self.cleanSession, keepAlive: keepAlive)
+            let connectPacket = MQTTConnectPacket(clientID: self.clientID, cleanSession: cleanSession, keepAlive: self.keepAlive)
             
             // Set Optional vars
-            connectPacket.username = username
-            connectPacket.password = password
+            connectPacket.username = self.username
+            connectPacket.password = self.password
             connectPacket.lastWillMessage = self.lastWillMessage
-
+            
             return self.send(promiseId: 1, packet: connectPacket).map { () -> () in
-                self.ping(time: TimeAmount.seconds(Int64(keepAlive)))
+                self.ping(time: TimeAmount.seconds(Int64(self.keepAlive)))
             }
         }
+    }
+    
+    public func connect(username: String? = nil, password: String? = nil, cleanSession: Bool = true, keepAlive: UInt16 = 0) -> EventLoopFuture<Void> {
+        self.username = username
+        self.password = password
+        self.keepAlive = keepAlive
+
+        handler.messageReceived = onMessageReceived
+        handler.errorCaught = onErrorCaught
+        handler.handlerRemoved = {
+            if let onHandlerRemoved = self.onHandlerRemoved {
+                onHandlerRemoved()
+            }
+            if self.autoReconnect {
+                self.disconnect().and(self.startAndConnect(cleanSession: false)).whenComplete { _ in }
+            }
+        }
+
+        return startAndConnect(cleanSession: cleanSession)
     }
 
     public func disconnect() -> EventLoopFuture<Void> {
