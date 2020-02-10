@@ -15,8 +15,12 @@ final class ZenMQTTTests: XCTestCase {
     }
     
     func testExample() {
-        let mqtt = ZenMQTT(host: "test.mosquitto.org", port: 1883, clientID: "test_\(Date())", autoReconnect: true, eventLoopGroup: eventLoopGroup)
-        
+        let mqtt = ZenMQTT(host: "biesseprodnf-gwagent.cpaas-accenture.com", port: 8883, clientID: "test_\(Date())", autoReconnect: true, eventLoopGroup: eventLoopGroup)
+        XCTAssertNoThrow(try mqtt.addTLS(
+            cert: "/Users/gerardo/Projects/ZenSTOMP/stunnel_client_neptune.pem.crt",
+            key: "/Users/gerardo/Projects/ZenSTOMP/stunnel_client.private_neptune.pem.key"
+        ))
+
         mqtt.onMessageReceived = { message in
             print(message.stringRepresentation!)
         }
@@ -38,22 +42,22 @@ Bugo e Morgan sono stati squalificati durante la quarta serata per diverse viola
 .data(using: .utf8)!
         
         do {
-            try mqtt.connect().wait()
+            try mqtt.connect(username: "admin", password: "Accenture.123!").wait()
             
             let topic1 = "test/topic1"
             let topic2 = "test/topic2"
             try mqtt.subscribe(to: [topic1 : .atLeastOnce, topic2 : .atLeastOnce]).wait()
             
-            sleep(3)
-            let message1 = MQTTPubMsg(topic: topic1, payload: "Hello world!".data(using: .utf8)!, retain: false, QoS: .atLeastOnce)
-            try mqtt.publish(message: message1).wait()
-
-            sleep(3)
-            print(bigMessage.count)
-            let message2 = MQTTPubMsg(topic: topic2, payload: bigMessage, retain: false, QoS: .atLeastOnce)
-            try mqtt.publish(message: message2).wait()
+            sleep(70)
+//            let message1 = MQTTPubMsg(topic: topic1, payload: "Hello world!".data(using: .utf8)!, retain: false, QoS: .atLeastOnce)
+//            try mqtt.publish(message: message1).wait()
+//
+//            sleep(3)
+//            print(bigMessage.count)
+//            let message2 = MQTTPubMsg(topic: topic2, payload: bigMessage, retain: false, QoS: .atLeastOnce)
+//            try mqtt.publish(message: message2).wait()
             
-            sleep(3)
+            sleep(30)
             try mqtt.unsubscribe(from: [topic1, topic2]).wait()
             try mqtt.disconnect().wait()
         } catch {

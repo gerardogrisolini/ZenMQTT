@@ -21,7 +21,7 @@ public class ZenMQTT {
     private let host: String
     private let port: Int
     private let clientID: String
-    private let autoReconnect: Bool
+    private var autoReconnect: Bool
     private var username: String?
     private var password: String?
     private var keepAlive: UInt16 = 0
@@ -133,19 +133,25 @@ public class ZenMQTT {
 
         handler.messageReceived = onMessageReceived
         handler.errorCaught = onErrorCaught
-        handler.handlerRemoved = {
-            if let onHandlerRemoved = self.onHandlerRemoved {
-                onHandlerRemoved()
-            }
-            if self.autoReconnect {
-                self.disconnect().and(self.startAndConnect(cleanSession: false)).whenComplete { _ in }
-            }
-        }
+//        handler.handlerRemoved = {
+//            if let onHandlerRemoved = self.onHandlerRemoved {
+//                onHandlerRemoved()
+//            }
+//            if self.autoReconnect {
+//                self.autoReconnect = false
+//                self.stop().whenComplete { _ in
+//                    self.startAndConnect(cleanSession: false).whenComplete { _ in }
+//                }
+//            }
+//        }
+        handler.handlerRemoved = onHandlerRemoved
 
         return startAndConnect(cleanSession: cleanSession)
     }
 
     public func disconnect() -> EventLoopFuture<Void> {
+        autoReconnect = false
+        
         let disconnectPacket = MQTTDisconnectPacket()
         return send(promiseId: 0, packet: disconnectPacket).flatMap { () -> EventLoopFuture<Void> in
             return self.stop()
