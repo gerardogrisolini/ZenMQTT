@@ -104,7 +104,7 @@ public class ZenMQTT {
         if promiseId > 0 {
             let promise = channel.eventLoop.makePromise(of: Void.self)
             handler.promises[promiseId] = promise
-            print(packet.header)
+            
             return channel.writeAndFlush(packet).flatMap { () -> EventLoopFuture<Void> in
                 promise.futureResult
             }
