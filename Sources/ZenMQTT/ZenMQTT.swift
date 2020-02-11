@@ -15,13 +15,13 @@ public class ZenMQTT {
 	
     private let eventLoopGroup: EventLoopGroup
     private var channel: Channel? = nil
-    private var sslClientHandler: NIOSSLClientHandler? = nil
+    private var sslContext: NIOSSLContext? = nil
     private let handler = MQTTHandler()
     
     private let host: String
     private let port: Int
     private let clientID: String
-    private var autoReconnect: Bool
+    private var reconnect: Bool
     private var username: String?
     private var password: String?
     private var keepAlive: UInt16 = 0
@@ -34,13 +34,13 @@ public class ZenMQTT {
         host: String,
         port: Int,
         clientID: String,
-        autoReconnect: Bool,
+        reconnect: Bool,
         eventLoopGroup: EventLoopGroup)
     {
         self.host = host
         self.port = port
         self.clientID = clientID
-        self.autoReconnect = autoReconnect
+        self.reconnect = reconnect
         self.eventLoopGroup = eventLoopGroup
     }
 
@@ -54,8 +54,7 @@ public class ZenMQTT {
             privateKey: .privateKey(key)
         )
         
-        let sslContext = try NIOSSLContext(configuration: config)
-        sslClientHandler = try NIOSSLClientHandler(context: sslContext, serverHostname: host)
+        sslContext = try NIOSSLContext(configuration: config)
     }
 
     private func start() -> EventLoopFuture<Void> {
@@ -71,8 +70,9 @@ public class ZenMQTT {
             .channelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
             .channelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_KEEPALIVE), value: 1)
             .channelInitializer { channel in
-                if let ssl = self.sslClientHandler {
-                    return channel.pipeline.addHandler(ssl).flatMap { () -> EventLoopFuture<Void> in
+                if let sslContext = self.sslContext {
+                    let sslClientHandler = try! NIOSSLClientHandler(context: sslContext, serverHostname: self.host)
+                    return channel.pipeline.addHandler(sslClientHandler).flatMap { () -> EventLoopFuture<Void> in
                         channel.pipeline.addHandlers(handlers)
                     }
                 } else {
@@ -85,7 +85,7 @@ public class ZenMQTT {
             }
     }
     
-    private func stop() -> EventLoopFuture<Void> {
+    public func stop() -> EventLoopFuture<Void> {
         guard let channel = channel else {
             return eventLoopGroup.next().makeFailedFuture(MQTTSessionError.socketError)
         }
@@ -111,7 +111,7 @@ public class ZenMQTT {
         }
     }
     
-    fileprivate func startAndConnect(cleanSession: Bool) -> EventLoopFuture<Void> {
+    public func reconnect(cleanSession: Bool) -> EventLoopFuture<Void> {
         return start().flatMap { () -> EventLoopFuture<Void> in
             let connectPacket = MQTTConnectPacket(clientID: self.clientID, cleanSession: cleanSession, keepAlive: self.keepAlive)
             
@@ -133,28 +133,27 @@ public class ZenMQTT {
 
         handler.messageReceived = onMessageReceived
         handler.errorCaught = onErrorCaught
-//        handler.handlerRemoved = {
-//            if let onHandlerRemoved = self.onHandlerRemoved {
-//                onHandlerRemoved()
-//            }
-//            if self.autoReconnect {
-//                self.autoReconnect = false
-//                self.stop().whenComplete { _ in
-//                    self.startAndConnect(cleanSession: false).whenComplete { _ in }
-//                }
-//            }
-//        }
-        handler.handlerRemoved = onHandlerRemoved
+        handler.handlerRemoved = {
+            if let onHandlerRemoved = self.onHandlerRemoved {
+                onHandlerRemoved()
+            }
+            
+            if self.reconnect {
+                self.stop().whenComplete { _ in
+                    self.reconnect(cleanSession: cleanSession).whenComplete { _ in }
+                }
+            }
+        }
 
-        return startAndConnect(cleanSession: cleanSession)
+        return reconnect(cleanSession: cleanSession)
     }
 
     public func disconnect() -> EventLoopFuture<Void> {
-        autoReconnect = false
+        reconnect = false
         
         let disconnectPacket = MQTTDisconnectPacket()
         return send(promiseId: 0, packet: disconnectPacket).flatMap { () -> EventLoopFuture<Void> in
-            return self.stop()
+            self.stop()
         }
     }
         

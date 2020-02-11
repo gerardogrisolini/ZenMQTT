@@ -22,7 +22,7 @@ let mqtt = ZenMQTT(
     host: "test.mosquitto.org",
     port: 1883,
     clientID: "zen-mqtt-test",
-    cleanSession: true,
+    reconnect: true,
     eventLoopGroup: eventLoopGroup
 )
 try mqtt.addTLS(cert: "certificate.crt", key: "private.key")
@@ -40,7 +40,7 @@ mqtt.onErrorCaught = { error in
 
 #### Connect to server
 ```
-try mqtt.connect(username: "admin", password: "123456789").wait()
+try mqtt.connect(cleanSession: true).wait()
 ```
 
 #### Subscibe topic
