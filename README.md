@@ -22,7 +22,7 @@ let mqtt = ZenMQTT(
     host: "test.mosquitto.org",
     port: 1883,
     clientID: "zen-mqtt-test",
-    autoreconnect: true,
+    reconnect: true,
     eventLoopGroup: eventLoopGroup
 )
 try mqtt.addTLS(cert: "certificate.crt", key: "private.key")

@@ -26,10 +26,12 @@ public class ZenMQTT {
     private var password: String?
     private var keepAlive: UInt16 = 0
     private var lastWillMessage: MQTTPubMsg? = nil
+    private var topics = [String: MQTTQoS]()
     public var onMessageReceived: MQTTMessageReceived? = nil
     public var onHandlerRemoved: MQTTHandlerRemoved? = nil
     public var onErrorCaught: MQTTErrorCaught? = nil
 
+    
     public init(
         host: String,
         port: Int,
@@ -102,7 +104,7 @@ public class ZenMQTT {
         if promiseId > 0 {
             let promise = channel.eventLoop.makePromise(of: Void.self)
             handler.promises[promiseId] = promise
-            
+            print(packet.header)
             return channel.writeAndFlush(packet).flatMap { () -> EventLoopFuture<Void> in
                 promise.futureResult
             }
@@ -111,7 +113,7 @@ public class ZenMQTT {
         }
     }
     
-    public func reconnect(cleanSession: Bool) -> EventLoopFuture<Void> {
+    public func reconnect(cleanSession: Bool, subscribe: Bool) -> EventLoopFuture<Void> {
         return start().flatMap { () -> EventLoopFuture<Void> in
             let connectPacket = MQTTConnectPacket(clientID: self.clientID, cleanSession: cleanSession, keepAlive: self.keepAlive)
             
@@ -121,6 +123,9 @@ public class ZenMQTT {
             connectPacket.lastWillMessage = self.lastWillMessage
             
             return self.send(promiseId: 1, packet: connectPacket).map { () -> () in
+                if subscribe {
+                    self.subscribe().whenComplete { _ in }
+                }
                 self.ping(time: TimeAmount.seconds(Int64(self.keepAlive)))
             }
         }
@@ -137,15 +142,15 @@ public class ZenMQTT {
             if let onHandlerRemoved = self.onHandlerRemoved {
                 onHandlerRemoved()
             }
-            
+
             if self.autoreconnect {
                 self.stop().whenComplete { _ in
-                    self.reconnect(cleanSession: cleanSession).whenComplete { _ in }
+                    self.reconnect(cleanSession: cleanSession, subscribe: true).whenComplete { _ in }
                 }
             }
         }
 
-        return reconnect(cleanSession: cleanSession)
+        return reconnect(cleanSession: cleanSession, subscribe: false)
     }
 
     public func disconnect() -> EventLoopFuture<Void> {
@@ -166,6 +171,16 @@ public class ZenMQTT {
         }
     }
     
+    fileprivate func subscribe() -> EventLoopFuture<Void> {
+        guard self.topics.count > 0 else {
+            return eventLoopGroup.next().makeSucceededFuture(())
+        }
+        
+        let msgID = nextMessageID()
+        let subscribePacket = MQTTSubPacket(topics: self.topics, messageID: msgID)
+        return send(promiseId: msgID, packet: subscribePacket)
+    }
+    
     public func publish(message: MQTTPubMsg) -> EventLoopFuture<Void> {
         let msgID = nextMessageID()
         let publishPacket = MQTTPublishPacket(messageID: msgID, message: message)
@@ -177,9 +192,10 @@ public class ZenMQTT {
     }
     
     public func subscribe(to topics: [String: MQTTQoS]) -> EventLoopFuture<Void> {
-        let msgID = nextMessageID()
-        let subscribePacket = MQTTSubPacket(topics: topics, messageID: msgID)
-        return send(promiseId: msgID, packet: subscribePacket)
+        for topic in topics {
+            self.topics[topic.key] = topic.value
+        }
+        return subscribe()
     }
 
     public func unsubscribe(from topic: String) -> EventLoopFuture<Void> {
@@ -187,6 +203,10 @@ public class ZenMQTT {
     }
     
     public func unsubscribe(from topics: [String]) -> EventLoopFuture<Void> {
+        for topic in topics {
+            self.topics.removeValue(forKey: topic)
+        }
+        
         let msgID = nextMessageID()
         let unSubPacket = MQTTUnsubPacket(topics: topics, messageID: msgID)
         return send(promiseId: msgID, packet: unSubPacket)

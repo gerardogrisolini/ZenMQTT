@@ -29,15 +29,14 @@ final class ZenMQTTTests: XCTestCase {
             print(error.localizedDescription)
         }
         
+        let topic1 = "test/topic1"
+        let topic2 = "test/topic2"
+
         do {
             try mqtt.connect(cleanSession: true).wait()
-            
-            let topic1 = "test/topic1"
-            let topic2 = "test/topic2"
+            try mqtt.subscribe(to: [topic1 : .atLeastOnce, topic2 : .atLeastOnce]).wait()
             
             sleep(50)
-            
-            try mqtt.subscribe(to: [topic1 : .atLeastOnce, topic2 : .atLeastOnce]).wait()
 
             let message1 = MQTTPubMsg(topic: topic1, payload: "Hello world!".data(using: .utf8)!, retain: false, QoS: .atLeastOnce)
             try mqtt.publish(message: message1).wait()
