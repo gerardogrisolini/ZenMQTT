@@ -124,7 +124,7 @@ public class ZenMQTT {
             
             return self.send(promiseId: 1, packet: connectPacket).map { () -> () in
                 if subscribe {
-                    self.subscribe().whenComplete { _ in }
+                    self.resubscribe()
                 }
                 self.ping(time: TimeAmount.seconds(Int64(self.keepAlive)))
             }
@@ -171,14 +171,12 @@ public class ZenMQTT {
         }
     }
     
-    fileprivate func subscribe() -> EventLoopFuture<Void> {
-        guard self.topics.count > 0 else {
-            return eventLoopGroup.next().makeSucceededFuture(())
-        }
+    fileprivate func resubscribe() {
+        guard self.topics.count > 0 else { return }
         
         let msgID = nextMessageID()
         let subscribePacket = MQTTSubPacket(topics: self.topics, messageID: msgID)
-        return send(promiseId: msgID, packet: subscribePacket)
+        send(promiseId: msgID, packet: subscribePacket).whenComplete { _ in }
     }
     
     public func publish(message: MQTTPubMsg) -> EventLoopFuture<Void> {
@@ -195,7 +193,10 @@ public class ZenMQTT {
         for topic in topics {
             self.topics[topic.key] = topic.value
         }
-        return subscribe()
+        
+        let msgID = nextMessageID()
+        let subscribePacket = MQTTSubPacket(topics: topics, messageID: msgID)
+        return send(promiseId: msgID, packet: subscribePacket)
     }
 
     public func unsubscribe(from topic: String) -> EventLoopFuture<Void> {
