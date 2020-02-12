@@ -94,7 +94,7 @@ public class ZenMQTT {
         
         channel.flush()
         return channel.close(mode: .all).map { () -> () in
-            channel = nil
+            self.channel = nil
         }
     }
         
