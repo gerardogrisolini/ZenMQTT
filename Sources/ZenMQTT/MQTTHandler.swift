@@ -26,7 +26,9 @@ final class MQTTHandler: ChannelInboundHandler, RemovableChannelHandler {
     }
     
     public func channelActive(context: ChannelHandlerContext) {
-        debugPrint("MQTT Client connected to \(context.remoteAddress!)")
+        #if DEBUG
+        print("MQTT Client connected to \(context.remoteAddress!)")
+        #endif
     }
         
     public func channelRead(context: ChannelHandlerContext, data: NIOAny) {

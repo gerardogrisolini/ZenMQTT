@@ -93,7 +93,9 @@ public class ZenMQTT {
         }
         
         channel.flush()
-        return channel.close(mode: .all)
+        return channel.close(mode: .all).map { () -> () in
+            channel = nil
+        }
     }
         
     private func send(promiseId: UInt16, packet: MQTTPacket) -> EventLoopFuture<Void> {
