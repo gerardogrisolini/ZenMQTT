@@ -163,9 +163,9 @@ public class ZenMQTT {
     }
         
     private func ping(time: TimeAmount) {
-        if time.nanoseconds == 0 { return }
-        
-        eventLoopGroup.next().scheduleRepeatedAsyncTask(initialDelay: time, delay: time) { task -> EventLoopFuture<Void> in
+        guard let channel = channel, time.nanoseconds > 0 else { return }
+
+        channel.eventLoop.scheduleRepeatedAsyncTask(initialDelay: time, delay: time) { task -> EventLoopFuture<Void> in
             let mqttPingReq = MQTTPingPacket()
             return self.send(promiseId: 0, packet: mqttPingReq)
         }
