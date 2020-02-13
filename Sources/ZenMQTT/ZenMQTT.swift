@@ -17,7 +17,8 @@ public class ZenMQTT {
     private var channel: Channel? = nil
     private var sslContext: NIOSSLContext? = nil
     private let handler = MQTTHandler()
-    
+    private var repeatedTask: RepeatedTask? = nil
+
     private let host: String
     private let port: Int
     private let clientID: String
@@ -88,6 +89,8 @@ public class ZenMQTT {
     }
     
     public func stop() -> EventLoopFuture<Void> {
+        repeatedTask?.cancel()
+        
         guard let channel = channel else {
             return eventLoopGroup.next().makeFailedFuture(MQTTSessionError.socketError)
         }
@@ -165,9 +168,11 @@ public class ZenMQTT {
     }
         
     private func ping(time: TimeAmount) {
+        repeatedTask?.cancel()
+        
         guard let channel = channel, time.nanoseconds > 0 else { return }
 
-        channel.eventLoop.scheduleRepeatedAsyncTask(initialDelay: time, delay: time) { task -> EventLoopFuture<Void> in
+        repeatedTask = channel.eventLoop.scheduleRepeatedAsyncTask(initialDelay: time, delay: time) { task -> EventLoopFuture<Void> in
             let mqttPingReq = MQTTPingPacket()
             return self.send(promiseId: 0, packet: mqttPingReq)
         }
