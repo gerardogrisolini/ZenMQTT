@@ -102,7 +102,7 @@ public class ZenMQTT {
     }
         
     private func send(promiseId: UInt16, packet: MQTTPacket) -> EventLoopFuture<Void> {
-        guard let channel = channel else {
+        guard let channel = channel, channel.isWritable else {
             return eventLoopGroup.next().makeFailedFuture(MQTTSessionError.socketError)
         }
 
