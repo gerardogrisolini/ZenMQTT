@@ -108,6 +108,7 @@ public class ZenMQTT {
 
         if promiseId > 0 {
             
+            handler.promises[promiseId]?.fail(MQTTSessionError.socketError)
             handler.promises.removeValue(forKey: promiseId)
 
             let promise = channel.eventLoop.makePromise(of: Void.self)
