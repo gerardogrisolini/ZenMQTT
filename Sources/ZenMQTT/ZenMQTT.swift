@@ -102,7 +102,7 @@ public class ZenMQTT {
     }
         
     private func send(promiseId: UInt16, packet: MQTTPacket) -> EventLoopFuture<Void> {
-        guard let channel = channel, channel.isWritable else {
+        guard let channel = channel else {
             return eventLoopGroup.next().makeFailedFuture(MQTTSessionError.socketError)
         }
 
@@ -150,6 +150,7 @@ public class ZenMQTT {
 
             if self.autoreconnect {
                 self.stop().whenComplete { _ in
+                    sleep(5)
                     self.reconnect(cleanSession: cleanSession, subscribe: true).whenComplete { _ in }
                 }
             }

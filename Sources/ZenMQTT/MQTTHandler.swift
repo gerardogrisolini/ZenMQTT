@@ -20,7 +20,6 @@ final class MQTTHandler: ChannelInboundHandler, RemovableChannelHandler {
     public var handlerRemoved: MQTTHandlerRemoved? = nil
     public var errorCaught: MQTTErrorCaught? = nil
     public var promises = Dictionary<UInt16, EventLoopPromise<Void>>()
-    private var isReconnect: Bool = false
     
     public init() {
     }
@@ -74,8 +73,6 @@ final class MQTTHandler: ChannelInboundHandler, RemovableChannelHandler {
     }
     
     public func handlerRemoved(context: ChannelHandlerContext) {
-        isReconnect = true
-        
         guard let handlerRemoved = handlerRemoved else { return }
         handlerRemoved()
     }

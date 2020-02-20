@@ -15,8 +15,12 @@ final class ZenMQTTTests: XCTestCase {
     }
     
     func testExample() {
-        let mqtt = ZenMQTT(host: "test.mosquitto.org", port: 1883, clientID: "test_\(Date())", reconnect: true, eventLoopGroup: eventLoopGroup)
-
+        let mqtt = ZenMQTT(host: "biesseprodnf-gwagent.cpaas-accenture.com", port: 8883, clientID: "test_\(Date())", reconnect: true, eventLoopGroup: eventLoopGroup)
+        XCTAssertNoThrow(try mqtt.addTLS(
+            cert: "/Users/gerardo/Projects/ZenSTOMP/stunnel_client_neptune.pem.crt",
+            key: "/Users/gerardo/Projects/ZenSTOMP/stunnel_client.private_neptune.pem.key"
+        ))
+        
         mqtt.onMessageReceived = { message in
             print(message.stringRepresentation!)
         }
@@ -33,7 +37,7 @@ final class ZenMQTTTests: XCTestCase {
         let topic2 = "test/topic2"
 
         do {
-            try mqtt.connect(cleanSession: true).wait()
+            try mqtt.connect(cleanSession: true, keepAlive: 10).wait()
             try mqtt.subscribe(to: [topic1 : .atLeastOnce, topic2 : .atLeastOnce]).wait()
             
             sleep(50)
