@@ -60,8 +60,18 @@ public class ZenMQTT {
         sslContext = try NIOSSLContext(configuration: config)
     }
 
+    public func addTLS(rootCert: String) throws {
+        let certs = try NIOSSLCertificate.fromPEMFile(rootCert)
+        
+        let config = TLSConfiguration.forClient(
+            certificateVerification: .none,
+            trustRoots: NIOSSLTrustRoots.certificates(certs)
+        )
+        
+        sslContext = try NIOSSLContext(configuration: config)
+    }
+    
     private func start() -> EventLoopFuture<Void> {
-                
         let handlers: [ChannelHandler] = [
             MessageToByteHandler(MQTTPacketEncoder()),
             ByteToMessageHandler(MQTTPacketDecoder()),
