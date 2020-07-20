@@ -164,7 +164,7 @@ public class ZenMQTT {
 
             if self.autoreconnect {
                 self.stop().whenComplete { _ in
-                    //sleep(1)
+                    sleep(1)
                     self.reconnect(cleanSession: cleanSession, subscribe: true).whenComplete { _ in }
                 }
             }
