@@ -147,6 +147,8 @@ public class ZenMQTT {
                 }
                 self.ping(time: TimeAmount.seconds(Int64(self.keepAlive)))
             }
+        }.flatMapError { err -> EventLoopFuture<Void> in
+            return self.eventLoopGroup.next().makeFailedFuture(err)
         }
     }
     

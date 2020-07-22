@@ -15,7 +15,7 @@ final class ZenMQTTTests: XCTestCase {
     }
     
     func testExample() {
-        let mqtt = ZenMQTT(host: "biessenfsit-cambiesse.cpaas-accenture.com", port: 8883, clientID: "test_\(Date())", reconnect: true, eventLoopGroup: eventLoopGroup)
+        let mqtt = ZenMQTT(host: "biessenfsit-cambiesse.cpaas-accenturee.com", port: 8883, clientID: "test_\(Date())", reconnect: true, eventLoopGroup: eventLoopGroup)
         XCTAssertNoThrow(try mqtt.addTLS(
             cert: "/Users/gerardo/Projects/opc-ua/opcua/Assets/stunnel_client_neptune.pem.crt",
             key: "/Users/gerardo/Projects/opc-ua/opcua/Assets/stunnel_client.private_neptune.pem.key"
