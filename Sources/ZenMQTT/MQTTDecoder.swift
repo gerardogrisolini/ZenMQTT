@@ -19,6 +19,7 @@ public final class MQTTPacketDecoder: ByteToMessageDecoder {
 
         if let packet = parse(buffer) {
             context.fireChannelRead(self.wrapInboundOut(packet))
+            context.fireChannelReadComplete()
             buffer.clear()
             return .continue
         } else {
