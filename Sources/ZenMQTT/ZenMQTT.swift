@@ -13,7 +13,7 @@ import NIOSSL
 
 public class ZenMQTT {
 	
-    private let dispatchQueue = DispatchQueue(label: "writer", attributes: .concurrent)
+    //private let dispatchQueue = DispatchQueue(label: "writer", attributes: .concurrent)
     private let eventLoopGroup: EventLoopGroup
     private var channel: Channel? = nil
     private var sslContext: NIOSSLContext? = nil
@@ -124,14 +124,16 @@ public class ZenMQTT {
         let promise = channel.eventLoop.makePromise(of: Void.self)
         handler.promises[promiseId] = promise
 
-        dispatchQueue.async(flags: .barrier) {
-            do {
-                try channel.writeAndFlush(packet).wait()
-                promise.succeed(())
-            } catch {
-                promise.fail(error)
-            }
-        }
+//        dispatchQueue.async(flags: .barrier) {
+//            do {
+//                try channel.writeAndFlush(packet).wait()
+//                promise.succeed(())
+//            } catch {
+//                promise.fail(error)
+//            }
+//        }
+        
+        channel.writeAndFlush(packet, promise: promise)
         
         return promise.futureResult
     }

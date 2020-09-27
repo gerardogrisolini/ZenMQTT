@@ -22,7 +22,7 @@ final class ZenMQTTTests: XCTestCase {
         ))
         
         mqtt.onMessageReceived = { message in
-            print(message.stringRepresentation)
+            print(message.stringRepresentation!)
         }
         
         mqtt.onHandlerRemoved = {
@@ -39,18 +39,18 @@ final class ZenMQTTTests: XCTestCase {
             try mqtt.connect(username: "admin", password: "Accenture.123!", cleanSession: true, keepAlive: 30).wait()
             try mqtt.subscribe(to: [topic : .atLeastOnce]).wait()
             
-            DispatchQueue.global(qos: .utility).async {
+            //DispatchQueue.global(qos: .utility).async {
                 do {
-                    for i in 0...500 {
+                    for i in 0...5000 {
                         let message = MQTTPubMsg(topic: topic, payload: "Hello world \(i)!".data(using: .utf8)!, retain: false, QoS: .atLeastOnce)
                         try mqtt.publish(message: message).wait()
                     }
                 } catch {
                     XCTFail(error.localizedDescription)
                 }
-            }
+            //}
 
-            sleep(3)
+            sleep(1)
             
             try mqtt.unsubscribe(from: [topic]).wait()
             try mqtt.disconnect().wait()
