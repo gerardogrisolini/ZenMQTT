@@ -43,4 +43,22 @@ public class MQTTPacket {
         
         return finalPacket
     }
+    
+//    private func remainingLen(len: UInt32) -> [UInt8] {
+//        var bytes: [UInt8] = []
+//        var digit: UInt8 = 0
+//        
+//        var len = len
+//        repeat {
+//            digit = UInt8(len % 128)
+//            len = len / 128
+//            // if there are more digits to encode, set the top bit of this digit
+//            if len > 0 {
+//                digit = digit | 0x80
+//            }
+//            bytes.append(digit)
+//        } while len > 0
+//        
+//        return bytes
+//    }
 }

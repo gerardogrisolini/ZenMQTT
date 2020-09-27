@@ -17,12 +17,12 @@ final class ZenMQTTTests: XCTestCase {
     func testExample() {
         let mqtt = ZenMQTT(host: "biesseprodnf-gwagent.cpaas-accenture.com", port: 8883, clientID: "test_\(Date())", reconnect: true, eventLoopGroup: eventLoopGroup)
         XCTAssertNoThrow(try mqtt.addTLS(
-            cert: "/Users/gerardo/Projects/opcua/Assets/stunnel_client_neptune.pem.crt",
-            key: "/Users/gerardo/Projects/opcua/Assets/stunnel_client.private_neptune.pem.key"
+            cert: "/Users/gerardo/Projects/opcua/opcua/Assets/stunnel_client_neptune.pem.crt",
+            key: "/Users/gerardo/Projects/opcua/opcua/Assets/stunnel_client.private_neptune.pem.key"
         ))
         
         mqtt.onMessageReceived = { message in
-            print(message.stringRepresentation!)
+            print(message.stringRepresentation)
         }
         
         mqtt.onHandlerRemoved = {
@@ -40,9 +40,8 @@ final class ZenMQTTTests: XCTestCase {
             try mqtt.subscribe(to: [topic : .atLeastOnce]).wait()
             
             DispatchQueue.global(qos: .utility).async {
-                sleep(3)
                 do {
-                    for i in 0...5 {
+                    for i in 0...500 {
                         let message = MQTTPubMsg(topic: topic, payload: "Hello world \(i)!".data(using: .utf8)!, retain: false, QoS: .atLeastOnce)
                         try mqtt.publish(message: message).wait()
                     }
@@ -51,7 +50,7 @@ final class ZenMQTTTests: XCTestCase {
                 }
             }
 
-            sleep(10)
+            sleep(3)
             
             try mqtt.unsubscribe(from: [topic]).wait()
             try mqtt.disconnect().wait()

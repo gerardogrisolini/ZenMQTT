@@ -17,29 +17,32 @@ public final class MQTTPacketDecoder: ByteToMessageDecoder {
         let (count, remainingLength) = try buffer.getRemainingLength(at: buffer.readerIndex + 1)
         guard buffer.readableBytes >= (1 + Int(count) + remainingLength) else { return .needMoreData }
 
-        if let packet = parse(buffer) {
+        if let packet = parse(&buffer) {
             context.fireChannelRead(self.wrapInboundOut(packet))
-            context.fireChannelReadComplete()
-            buffer.clear()
             return .continue
-        } else {
-            return .needMoreData
         }
-    }
-
-    public func decodeLast(context: ChannelHandlerContext, buffer: inout ByteBuffer, seenEOF: Bool) throws -> DecodingState {
-        // EOF is not semantic in WebSocket, so ignore this.
         return .needMoreData
     }
 
-    func parse(_ buffer: ByteBuffer) -> MQTTPacket? {
-        var headerByte: UInt8 = 0
-        headerByte = buffer.getBytes(at: 0, length: 1)![0]
-        
-        guard let len = buffer.readPackedLength() else { return nil }
+    public func decodeLast(context: ChannelHandlerContext, buffer: inout ByteBuffer, seenEOF: Bool) throws -> DecodingState {
+        try decode(context: context, buffer: &buffer)
+    }
 
+    func parse(_ buffer: inout ByteBuffer) -> MQTTPacket? {
+        var body = Data()
+        let headerByte: UInt8 = buffer.getInteger(at: buffer.readerIndex)!
         let header = MQTTPacketFixedHeader(networkByte: headerByte)
-        let body = Data(buffer.getBytes(at: buffer.readableBytes - len, length: len)!)
+        buffer.moveReaderIndex(forwardBy: 1)
+        
+        guard let (count, remainingLength) = try? buffer.getRemainingLength(at: buffer.readerIndex) else { return nil }
+        let len = Int(count) + remainingLength - 1
+        buffer.moveReaderIndex(forwardBy: Int(count))
+        
+        if len > 0 {
+            let bytes = buffer.getBytes(at: buffer.readerIndex, length: len)!
+            body.append(contentsOf: bytes)
+            buffer.moveReaderIndex(forwardBy: len)
+        }
         
         switch header.packetType {
             case .connAck:
@@ -61,6 +64,15 @@ public final class MQTTPacketDecoder: ByteToMessageDecoder {
 }
 
 extension ByteBuffer {
+    /*
+     Lunghezza rimanente
+
+     Il secondo byte dell'intestazione fissa contiene la lunghezza rimanente che è la lunghezza dell'intestazione variabile + la lunghezza del carico utile. La lunghezza rimanente può utilizzare fino a 4 byte in cui ogni byte utilizza 7 bit per la lunghezza e il bit MSB è un flag di continuazione.
+     se il bit di flag di continuazione di un byte è 1, significa che anche il byte successivo fa parte della lunghezza rimanente. E se il bit del flag di continuazione è 0, significa che il byte è l'ultimo della lunghezza rimanente.
+
+     Per esempio. se la lunghezza variabile dell'intestazione è 10 e la lunghezza del carico utile è 20, la lunghezza rimanente dovrebbe essere 30.
+     */
+    
     func getRemainingLength(at newReaderIndex: Int) throws -> (count: UInt8, length: Int) {
         var multiplier: UInt32 = 1
         var value: Int = 0
@@ -81,24 +93,6 @@ extension ByteBuffer {
         } while ((byte & 128) != 0)// && !isEmpty
 
         return (count: UInt8(currentIndex - newReaderIndex), length: value)
-    }
-
-    func readPackedLength() -> Int? {
-        var multiplier = 1
-        var length = 0
-        var encodedByte: UInt8 = 0
-        var index = 1
-        repeat {
-            //let _ = read(&encodedByte, 1)
-            encodedByte = getBytes(at: index, length: 1)![0]
-            index += 1
-            length += (Int(encodedByte) & 127) * multiplier
-            multiplier *= 128
-            if multiplier > 128*128*128 {
-                return nil
-            }
-        } while ((Int(encodedByte) & 128) != 0)
-        return length <= 128*128*128 ? length : nil
     }
 }
 
