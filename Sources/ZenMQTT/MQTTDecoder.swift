@@ -35,13 +35,13 @@ public final class MQTTPacketDecoder: ByteToMessageDecoder {
         buffer.moveReaderIndex(forwardBy: 1)
         
         guard let (count, remainingLength) = try? buffer.getRemainingLength(at: buffer.readerIndex) else { return nil }
-        let len = Int(count) + remainingLength - 1
+        //let len = Int(count) + remainingLength - 1
         buffer.moveReaderIndex(forwardBy: Int(count))
         
-        if len > 0 {
-            let bytes = buffer.getBytes(at: buffer.readerIndex, length: len)!
+        if remainingLength > 0 {
+            let bytes = buffer.getBytes(at: buffer.readerIndex, length: remainingLength)!
             body.append(contentsOf: bytes)
-            buffer.moveReaderIndex(forwardBy: len)
+            buffer.moveReaderIndex(forwardBy: remainingLength)
         }
         
         switch header.packetType {
