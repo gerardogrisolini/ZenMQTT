@@ -1,11 +1,9 @@
 //
-//  MQTTExtensions.swift
-//  SwiftMQTT
+//  MQTT+Extension.swift
 //
-//  Created by Ankit Aggarwal on 10/11/15.
-//  Copyright © 2015 Ankit. All rights reserved.
+//  Created by Gerardo Grisolini on 01/27/20.
+//  Copyright © 2020 Gerardo Grisolini. All rights reserved.
 //
-
 import Foundation
 
 public enum MQTTSessionError: Error {

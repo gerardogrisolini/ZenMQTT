@@ -35,7 +35,6 @@ public final class MQTTPacketDecoder: ByteToMessageDecoder {
         buffer.moveReaderIndex(forwardBy: 1)
         
         guard let (count, remainingLength) = try? buffer.getRemainingLength(at: buffer.readerIndex) else { return nil }
-        //let len = Int(count) + remainingLength - 1
         buffer.moveReaderIndex(forwardBy: Int(count))
         
         if remainingLength > 0 {
@@ -90,7 +89,7 @@ extension ByteBuffer {
             value += Int(UInt32(byte & 127) * multiplier)
             multiplier *= 128
             currentIndex += 1
-        } while ((byte & 128) != 0)// && !isEmpty
+        } while ((byte & 128) != 0)
 
         return (count: UInt8(currentIndex - newReaderIndex), length: value)
     }

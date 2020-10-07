@@ -1,9 +1,8 @@
 //
 //  MQTTMessage.swift
-//  SwiftMQTT
 //
-//  Created by David Giovannini on 5/20/17.
-//  Copyright © 2017 Object Computing Inc. All rights reserved.
+//
+//  Created by Gerardo Grisolini on 01/02/2020.
 //
 
 import Foundation

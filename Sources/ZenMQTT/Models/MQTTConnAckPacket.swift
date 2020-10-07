@@ -1,10 +1,10 @@
 //
 //  MQTTConnAckPacket.swift
-//  SwiftMQTT
 //
-//  Created by Ankit Aggarwal on 12/11/15.
-//  Copyright © 2015 Ankit. All rights reserved.
 //
+//  Created by Gerardo Grisolini on 01/02/2020.
+//
+
 
 import Foundation
 

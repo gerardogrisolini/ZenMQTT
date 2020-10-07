@@ -1,6 +1,5 @@
 //
 //  ZenMQTT.swift
-//  ZenMQTT
 //
 //  Created by Gerardo Grisolini on 01/27/20.
 //  Copyright © 2020 Gerardo Grisolini. All rights reserved.

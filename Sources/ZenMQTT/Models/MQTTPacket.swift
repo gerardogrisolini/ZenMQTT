@@ -1,9 +1,8 @@
 //
 //  MQTTPacket.swift
-//  SwiftMQTT
 //
-//  Created by Ankit Aggarwal on 10/11/15.
-//  Copyright © 2015 Ankit. All rights reserved.
+//
+//  Created by Gerardo Grisolini on 01/02/2020.
 //
 
 import Foundation
