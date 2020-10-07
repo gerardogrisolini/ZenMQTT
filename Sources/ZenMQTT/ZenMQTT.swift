@@ -13,7 +13,6 @@ import NIOSSL
 
 public class ZenMQTT {
 	
-    //private let dispatchQueue = DispatchQueue(label: "writer", attributes: .concurrent)
     private let eventLoopGroup: EventLoopGroup
     private var channel: Channel? = nil
     private var sslContext: NIOSSLContext? = nil
@@ -82,11 +81,11 @@ public class ZenMQTT {
         return ClientBootstrap(group: eventLoopGroup)
             // Enable SO_REUSEADDR.
             .channelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_REUSEADDR), value: 1)
-            //.channelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_KEEPALIVE), value: 1)
-            //.channelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
+            .channelOption(ChannelOptions.socket(SocketOptionLevel(SOL_SOCKET), SO_KEEPALIVE), value: 1)
+            .channelOption(ChannelOptions.socket(IPPROTO_TCP, TCP_NODELAY), value: 1)
             .channelOption(ChannelOptions.connectTimeout, value: TimeAmount.seconds(5))
-            //.channelOption(ChannelOptions.maxMessagesPerRead, value: 16)
-            //.channelOption(ChannelOptions.recvAllocator, value: AdaptiveRecvByteBufferAllocator())
+            .channelOption(ChannelOptions.maxMessagesPerRead, value: 16)
+            .channelOption(ChannelOptions.recvAllocator, value: AdaptiveRecvByteBufferAllocator())
             .channelInitializer { channel in
                 if let sslContext = self.sslContext {
                     let sslClientHandler = try! NIOSSLClientHandler(context: sslContext, serverHostname: self.host)
