@@ -10,6 +10,11 @@ import NIO
 
 public final class MQTTPacketDecoder: ByteToMessageDecoder {
     public typealias InboundOut = MQTTPacket
+    private let protocolVersion: MQTTProtocolVersion
+
+    public init(protocolVersion: MQTTProtocolVersion = .v311) {
+        self.protocolVersion = protocolVersion
+    }
 
     public func decode(context: ChannelHandlerContext, buffer: inout ByteBuffer) throws -> DecodingState  {
         guard buffer.readableBytes >= 2 else { return .needMoreData }
@@ -45,17 +50,27 @@ public final class MQTTPacketDecoder: ByteToMessageDecoder {
         
         switch header.packetType {
             case .connAck:
-                return MQTTConnAckPacket(header: header, networkData: body)
+                return MQTTConnAckPacket(header: header, networkData: body, protocolVersion: protocolVersion)
             case .subAck:
-                return MQTTSubAckPacket(header: header, networkData: body)
+                return MQTTSubAckPacket(header: header, networkData: body, protocolVersion: protocolVersion)
             case .unSubAck:
-                return MQTTUnSubAckPacket(header: header, networkData: body)
-            case .pubRec, .pubAck:
-                return MQTTPubAck(header: header, networkData: body)
+                return MQTTUnSubAckPacket(header: header, networkData: body, protocolVersion: protocolVersion)
+            case .pubAck:
+                return MQTTPubAck(header: header, networkData: body, protocolVersion: protocolVersion)
+            case .pubRec:
+                return MQTTPubRecPacket(header: header, networkData: body, protocolVersion: protocolVersion)
+            case .pubRel:
+                return MQTTPubRelPacket(header: header, networkData: body, protocolVersion: protocolVersion)
+            case .pubComp:
+                return MQTTPubCompPacket(header: header, networkData: body, protocolVersion: protocolVersion)
             case .publish:
-                return MQTTPublishPacket(header: header, networkData: body)
+                return MQTTPublishPacket(header: header, networkData: body, protocolVersion: protocolVersion)
             case .pingResp:
                 return MQTTPingResp(header: header)
+            case .disconnect:
+                return MQTTDisconnectPacket(header: header, networkData: body, protocolVersion: protocolVersion)
+            case .auth:
+                return MQTTAuthPacket(header: header, networkData: body)
             default:
                 return nil
         }

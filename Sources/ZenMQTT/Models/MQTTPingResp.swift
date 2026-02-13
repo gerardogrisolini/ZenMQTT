@@ -7,7 +7,7 @@
 
 import Foundation
 
-class MQTTPingResp: MQTTPacket {
+final class MQTTPingResp: MQTTPacket, @unchecked Sendable {
     
     override init(header: MQTTPacketFixedHeader) {
         super.init(header: header)

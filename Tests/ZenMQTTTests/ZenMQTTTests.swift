@@ -14,12 +14,79 @@ final class ZenMQTTTests: XCTestCase {
         try! eventLoopGroup.syncShutdownGracefully()
     }
     
-    func testExample() {
-        let mqtt = ZenMQTT(host: "biesseprodnf-gwagent.cpaas-accenture.com", port: 8883, clientID: "test_\(Date())", reconnect: true, eventLoopGroup: eventLoopGroup)
-        XCTAssertNoThrow(try mqtt.addTLS(
-            cert: "/Users/gerardo/Projects/opcua/opcua/Assets/stunnel_client_neptune.pem.crt",
-            key: "/Users/gerardo/Projects/opcua/opcua/Assets/stunnel_client.private_neptune.pem.key"
-        ))
+    func testMQTTv311() async throws {
+        try await runScenario(version: .v311)
+    }
+
+    func testMQTTv500() async throws {
+        try await runScenario(version: .v500)
+    }
+
+    func testDecodePubAckFailureReasonCode() {
+        let header = MQTTPacketFixedHeader(packetType: .pubAck, flags: 0)
+        let data = Data([0x00, 0x0A, 0x87, 0x00]) // packetId=10, reasonCode=Not Authorized, empty props
+        let packet = MQTTPubAck(header: header, networkData: data, protocolVersion: .v500)
+
+        XCTAssertTrue(packet.reasonCode.isFailure)
+        XCTAssertEqual(packet.messageID, 10)
+    }
+
+    func testDecodeAuthPacket() {
+        let header = MQTTPacketFixedHeader(packetType: .auth, flags: 0)
+        var data = Data()
+        data.append(0x18) // Continue authentication
+
+        var props = Data()
+        props.append(0x15) // Authentication Method
+        props.mqtt_append("SCRAM-SHA-256")
+        props.append(0x16) // Authentication Data
+        props.mqtt_append("step-1".data(using: .utf8)!)
+        props.append(0x1F) // Reason String
+        props.mqtt_append("challenge")
+        data.mqtt_appendVariableInteger(props.count)
+        data.append(props)
+
+        let packet = MQTTAuthPacket(header: header, networkData: data)
+        XCTAssertEqual(packet.reasonCode, .continue)
+        XCTAssertEqual(packet.properties?.authenticationMethod, "SCRAM-SHA-256")
+        XCTAssertEqual(String(data: packet.properties?.authenticationData ?? Data(), encoding: .utf8), "step-1")
+        XCTAssertEqual(packet.properties?.reasonString, "challenge")
+    }
+
+    func testDecodePubRecRelCompPackets() {
+        let recHeader = MQTTPacketFixedHeader(packetType: .pubRec, flags: 0)
+        let relHeader = MQTTPacketFixedHeader(packetType: .pubRel, flags: 0x02)
+        let compHeader = MQTTPacketFixedHeader(packetType: .pubComp, flags: 0)
+
+        let rec = MQTTPubRecPacket(header: recHeader, networkData: Data([0x00, 0x0A, 0x00, 0x00]), protocolVersion: .v500)
+        let rel = MQTTPubRelPacket(header: relHeader, networkData: Data([0x00, 0x0A, 0x00, 0x00]), protocolVersion: .v500)
+        let comp = MQTTPubCompPacket(header: compHeader, networkData: Data([0x00, 0x0A, 0x00, 0x00]), protocolVersion: .v500)
+
+        XCTAssertEqual(rec.messageID, 10)
+        XCTAssertEqual(rel.messageID, 10)
+        XCTAssertEqual(comp.messageID, 10)
+        XCTAssertFalse(rec.reasonCode.isFailure)
+        XCTAssertFalse(rel.reasonCode.isFailure)
+        XCTAssertFalse(comp.reasonCode.isFailure)
+    }
+
+    private func runScenario(version: MQTTProtocolVersion) async throws {
+        let env = ProcessInfo.processInfo.environment
+        let host = env["MQTT_TEST_HOST"] ?? "test.mosquitto.org"
+        let port = Int(env["MQTT_TEST_PORT"] ?? "8884") ?? 8884
+        let certPath = env["MQTT_CLIENT_CERT"] ?? "/Users/gerardo/Projects/ZenMQTT/certs/test-mosquitto-client.crt"
+        let keyPath = env["MQTT_CLIENT_KEY"] ?? "/Users/gerardo/Projects/ZenMQTT/certs/test-mosquitto-client.key"
+        let clientID = "test_\(UUID().uuidString)"
+
+        guard FileManager.default.fileExists(atPath: certPath) else {
+            throw XCTSkip("mTLS certificate not found at \(certPath)")
+        }
+        guard FileManager.default.fileExists(atPath: keyPath) else {
+            throw XCTSkip("mTLS private key not found at \(keyPath)")
+        }
+
+        let mqtt = ZenMQTT(host: host, port: port, clientID: clientID, reconnect: true, protocolVersion: version, eventLoopGroup: eventLoopGroup)
+        XCTAssertNoThrow(try mqtt.addTLS(cert: certPath, key: keyPath))
         
         mqtt.onMessageReceived = { message in
             print(message.stringRepresentation!)
@@ -33,43 +100,53 @@ final class ZenMQTTTests: XCTestCase {
             print(error.localizedDescription)
         }
         
-        let topic = "test/topic1"
+        let topic = "zenmqtt/test/\(clientID)"
 
-        do {
-            try mqtt.connect(username: "admin", password: "Accenture.123!", cleanSession: true, keepAlive: 30).wait()
-            try mqtt.subscribe(to: [topic : .atLeastOnce]).wait()
-            
-            //DispatchQueue.global(qos: .utility).async {
-                do {
-                    for i in 0...5000 {
-                        let message = MQTTPubMsg(topic: topic, payload: "Hello world \(i)!".data(using: .utf8)!, retain: false, QoS: .atLeastOnce)
-                        try mqtt.publish(message: message).wait()
-                    }
-                } catch {
-                    XCTFail(error.localizedDescription)
-                }
-            //}
+        let connectProperties: MQTTConnectProperties? = version == .v500
+            ? MQTTConnectProperties(
+                sessionExpiryInterval: 60,
+                receiveMaximum: 20,
+                maximumPacketSize: 1_048_576,
+                topicAliasMaximum: 10
+            )
+            : nil
 
-            sleep(1)
-            
-            try mqtt.unsubscribe(from: [topic]).wait()
-            try mqtt.disconnect().wait()
-        } catch {
-            XCTFail("\(error)")
+        try await mqtt.connect(cleanSession: true, keepAlive: 30, protocolVersion: version, connectProperties: connectProperties)
+        try await mqtt.subscribe(to: [topic : .atLeastOnce])
+
+        for i in 0...10 {
+            let publishProperties: MQTTPublishProperties? = version == .v500
+                ? MQTTPublishProperties(
+                    payloadFormatIndicator: 1,
+                    messageExpiryInterval: 60,
+                    contentType: "text/plain",
+                    responseTopic: "zenmqtt/resp/\(clientID)",
+                    correlationData: "corr-\(i)".data(using: .utf8),
+                    topicAlias: 1
+                )
+                : nil
+            let message = MQTTPubMsg(
+                topic: topic,
+                payload: "Hello world \(i)!".data(using: .utf8)!,
+                retain: false,
+                QoS: .atLeastOnce,
+                properties: publishProperties
+            )
+            try await mqtt.publish(message: message)
         }
-        
-    }
 
-    static var allTests = [
-        ("testExample", testExample),
-    ]
-    
-            
-let bigMessage = """
-    Dopo la conferenza stampa di presentazione del 14 gennaio 2020, Amadeus è stato accusato di sessismo in quanto, annunciando la presenza tra le donne della kermesse di Francesca Sofia Novello, modella e fidanzata di Valentino Rossi, dice di «averla scelta per la bellezza ma anche per la capacità di stare accanto a un grande uomo, stando un passo indietro». La frase ha suscitato numerose reazioni sui social, portando il conduttore a scusarsi dicendo che quel "passo indietro" si riferiva alla scelta di Francesca di stare fuori dai riflettori che inevitabilmente sono puntati su un campione come Valentino.[69]
-    Ha suscitato molte polemiche la partecipazione del rapper romano Junior Cally, in quanto alcuni testi di sue precedenti canzoni conterrebbero riferimenti al sessismo e al femminicidio.[70] Nonostante il cantautore si sia scusato pubblicamente sui suoi canali social, da più parti è stata chiesta l'esclusione del cantante dalla gara, anche con una petizione online che ha raccolto oltre 20 mila firme;[71] dal comitato Cisl donne del Friuli Venezia Giulia è partita una mobilitazione per boicottare il Festival con l'hashtag #iononguardosanremo; nessun provvedimento è stato preso sulla questione.
-    Bugo e Morgan sono stati squalificati durante la quarta serata per diverse violazioni del regolamento; tra quelle più evidenti vi è la modifica del testo dell'inedito "Sincero" da parte di Morgan, che lo ha trasformato in un'invettiva contro Bugo, reo a suo dire di aver contribuito la sera precedente al pessimo piazzamento (24° e ultimo posto sia nella classifica della serata che in quella generale) cantando dei pezzi del brano "Canzone d'amore" di Sergio Endrigo che sarebbero invece spettati a Morgan: il testo originale dell'inedito recitava: "Le buone intenzioni, l’educazione, la tua foto profilo, buongiorno e buonasera, e la gratitudine, le circostanze, bevi se vuoi ma fallo responsabilmente, rimetti in ordine tutte le cose, lavati i denti e non provare invidia. Non lamentarti che c’è sempre peggio, ricorda che devi fare benzina. Ma sono solo io […]. Il testo modificato da Morgan diceva: "Le brutte intenzioni, la maleducazione, la tua brutta figura di ieri sera, la tua ingratitudine, la tua arroganza, fai ciò che vuoi mettendo i piedi in testa", "certo il disordine è una forma d'arte", "ma tu sai solo coltivare invidia", "ringrazia il cielo se sei su questo palco, rispetta chi ti ci ha portato dentro e questo sono io" (riferendosi al fatto che secondo lui Bugo ha potuto partecipare al Festival solo grazie alla popolarità del membro dei Bluvertigo). Bugo, una volta sentito tali parole, ha preso dei fogli dallo spartito di Morgan e ha abbandonato il palco (altra grave violazione del regolamento). È la prima volta nella storia del Festival che un concorrente viene squalificato a gara in corso
-"""
-.data(using: .utf8)!
-            
+        let qos2Message = MQTTPubMsg(
+            topic: topic,
+            payload: "Hello qos2".data(using: .utf8)!,
+            retain: false,
+            QoS: .exactlyOnce,
+            properties: version == .v500 ? MQTTPublishProperties(contentType: "text/plain") : nil
+        )
+        try await mqtt.publish(message: qos2Message)
+
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        
+        try await mqtt.unsubscribe(from: [topic])
+        try await mqtt.disconnect()
+    }
 }

@@ -12,12 +12,14 @@ public struct MQTTMessage {
     public let payload: Data
     public let id: UInt16
     public let retain: Bool
+    public let properties: MQTTPublishProperties?
     
     internal init(publishPacket: MQTTPublishPacket) {
         self.topic = publishPacket.message.topic
         self.payload = publishPacket.message.payload
         self.id = publishPacket.messageID
         self.retain = publishPacket.message.retain
+        self.properties = publishPacket.message.properties
     }
     
     public var stringRepresentation: String? {

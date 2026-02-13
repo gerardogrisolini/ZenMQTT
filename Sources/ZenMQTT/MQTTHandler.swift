@@ -11,6 +11,8 @@ import NIO
 public typealias MQTTMessageReceived = (MQTTMessage) -> ()
 public typealias MQTTHandlerRemoved = () -> ()
 public typealias MQTTErrorCaught = (Error) -> ()
+public typealias MQTTDisconnectReceived = (MQTTDisconnectReasonCode, MQTTDisconnectProperties?) -> ()
+public typealias MQTTAuthReceived = (MQTTAuthReasonCode, MQTTAuthProperties?) -> ()
 
 final class MQTTHandler: ChannelInboundHandler, RemovableChannelHandler {
     public typealias InboundIn = MQTTPacket
@@ -60,7 +62,7 @@ final class MQTTHandler: ChannelInboundHandler, RemovableChannelHandler {
             }
         case let publishPacket as MQTTPublishPacket:
             if publishPacket.messageID > 0 {
-                let pubAck = MQTTPubAck(messageID: publishPacket.messageID)
+                let pubAck = MQTTPubAck(messageID: publishPacket.messageID, protocolVersion: .v311)
                 context.writeAndFlush(self.wrapOutboundOut(pubAck), promise: nil)
             }
             if let messageReceived = messageReceived {

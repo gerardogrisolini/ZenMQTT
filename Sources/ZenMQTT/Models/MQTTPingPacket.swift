@@ -7,7 +7,7 @@
 
 import Foundation
 
-class MQTTPingPacket: MQTTPacket {
+final class MQTTPingPacket: MQTTPacket, @unchecked Sendable {
     
     init() {
         super.init(header: MQTTPacketFixedHeader(packetType: MQTTPacketType.pingReq, flags: 0))

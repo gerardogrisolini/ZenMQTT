@@ -1,77 +1,68 @@
-//
-//  MQTTPubAck.swift
-//
-//
-//  Created by Gerardo Grisolini on 01/02/2020.
-//
-
 import Foundation
 
-final class MQTTPubAck: MQTTPacket, @unchecked Sendable {
-    
+final class MQTTPubRelPacket: MQTTPacket, @unchecked Sendable {
     let messageID: UInt16
     let protocolVersion: MQTTProtocolVersion
-    let reasonCode: MQTTPubAckReasonCode
+    let reasonCode: MQTTPubRelReasonCode
     let properties: MQTTPubAckProperties?
-    
+
     init(
         messageID: UInt16,
         protocolVersion: MQTTProtocolVersion,
-        reasonCode: MQTTPubAckReasonCode = .success,
+        reasonCode: MQTTPubRelReasonCode = .success,
         properties: MQTTPubAckProperties? = nil
     ) {
         self.messageID = messageID
         self.protocolVersion = protocolVersion
         self.reasonCode = reasonCode
         self.properties = properties
-        super.init(header: MQTTPacketFixedHeader(packetType: MQTTPacketType.pubAck, flags: 0))
+        super.init(header: MQTTPacketFixedHeader(packetType: .pubRel, flags: 0x02))
     }
-    
+
     override func variableHeader() -> Data {
-        var variableHeader = Data()
-        variableHeader.mqtt_append(messageID)
+        var data = Data()
+        data.mqtt_append(messageID)
+
         if protocolVersion == .v500 {
             let hasProperties = !(properties?.userProperties.isEmpty ?? true) || properties?.reasonString != nil
             if reasonCode != .success || hasProperties {
-                variableHeader.mqtt_append(reasonCode.rawValue)
-
+                data.mqtt_append(reasonCode.rawValue)
                 var props = Data()
                 if let reasonString = properties?.reasonString {
                     props.mqtt_append(UInt8(0x1F))
                     props.mqtt_append(reasonString)
                 }
                 if let userProperties = properties?.userProperties {
-                    for (key, value) in userProperties {
+                    for (k, v) in userProperties {
                         props.mqtt_append(UInt8(0x26))
-                        props.mqtt_append(key)
-                        props.mqtt_append(value)
+                        props.mqtt_append(k)
+                        props.mqtt_append(v)
                     }
                 }
-
-                variableHeader.mqtt_appendVariableInteger(props.count)
-                variableHeader.append(props)
+                data.mqtt_appendVariableInteger(props.count)
+                data.append(props)
             }
         }
-        return variableHeader
+
+        return data
     }
-    
+
     init(header: MQTTPacketFixedHeader, networkData: Data, protocolVersion: MQTTProtocolVersion) {
         self.protocolVersion = protocolVersion
-        messageID = (UInt16(networkData[0]) * UInt16(256)) + UInt16(networkData[1])
+        self.messageID = (UInt16(networkData[0]) * UInt16(256)) + UInt16(networkData[1])
         if protocolVersion == .v500, networkData.count > 2 {
-            reasonCode = MQTTPubAckReasonCode(rawValue: networkData[2]) ?? .unspecifiedError
-
+            self.reasonCode = MQTTPubRelReasonCode(rawValue: networkData[2]) ?? .packetIdentifierNotFound
             if networkData.count > 3,
-               let (propsLength, consumed) = mqtt_decodeVariableInteger(from: networkData, at: 3) {
+               let (len, consumed) = mqtt_decodeVariableInteger(from: networkData, at: 3) {
                 let start = 3 + consumed
-                let end = min(start + propsLength, networkData.count)
-                properties = Self.decodeProperties(from: networkData.subdata(in: start..<end))
+                let end = min(start + len, networkData.count)
+                self.properties = Self.decodeProperties(from: networkData.subdata(in: start..<end))
             } else {
-                properties = MQTTPubAckProperties()
+                self.properties = MQTTPubAckProperties()
             }
         } else {
-            reasonCode = .success
-            properties = nil
+            self.reasonCode = .success
+            self.properties = nil
         }
         super.init(header: header)
     }
@@ -83,23 +74,21 @@ final class MQTTPubAck: MQTTPacket, @unchecked Sendable {
         while index < data.count {
             let id = data[index]
             index += 1
-
             switch id {
             case 0x1F:
                 guard let (value, consumed) = mqtt_readUTF8String(from: data, at: index) else { return props }
                 props.reasonString = value
                 index += consumed
             case 0x26:
-                guard let (key, keyConsumed) = mqtt_readUTF8String(from: data, at: index) else { return props }
-                index += keyConsumed
-                guard let (value, valueConsumed) = mqtt_readUTF8String(from: data, at: index) else { return props }
-                index += valueConsumed
-                props.userProperties[key] = value
+                guard let (k, c1) = mqtt_readUTF8String(from: data, at: index) else { return props }
+                index += c1
+                guard let (v, c2) = mqtt_readUTF8String(from: data, at: index) else { return props }
+                index += c2
+                props.userProperties[k] = v
             default:
                 return props
             }
         }
-
         return props
     }
 }

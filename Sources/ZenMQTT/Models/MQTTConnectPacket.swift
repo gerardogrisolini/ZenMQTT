@@ -7,24 +7,32 @@
 
 import Foundation
 
-class MQTTConnectPacket: MQTTPacket {
+final class MQTTConnectPacket: MQTTPacket, @unchecked Sendable {
     
     let protocolName: String
-    let protocolLevel: UInt8
+    let protocolVersion: MQTTProtocolVersion
     let cleanSession: Bool
     let keepAlive: UInt16
     let clientID: String
+    let connectProperties: MQTTConnectProperties?
     
     var username: String? = nil
     var password: String? = nil
     var lastWillMessage: MQTTPubMsg? = nil
     
-    init(clientID: String, cleanSession: Bool, keepAlive: UInt16) {
+    init(
+        clientID: String,
+        cleanSession: Bool,
+        keepAlive: UInt16,
+        protocolVersion: MQTTProtocolVersion,
+        connectProperties: MQTTConnectProperties?
+    ) {
         self.protocolName = "MQTT"
-        self.protocolLevel = 0x04
+        self.protocolVersion = protocolVersion
         self.cleanSession = cleanSession
         self.keepAlive = keepAlive
         self.clientID = clientID
+        self.connectProperties = connectProperties
         super.init(header: MQTTPacketFixedHeader(packetType: .connect, flags: 0))
     }
     
@@ -58,9 +66,30 @@ class MQTTConnectPacket: MQTTPacket {
     override func variableHeader() -> Data {
         var variableHeader = Data(capacity: 1024)
         variableHeader.mqtt_append(protocolName)
-        variableHeader.mqtt_append(protocolLevel)
+        variableHeader.mqtt_append(protocolVersion.rawValue)
         variableHeader.mqtt_append(encodedConnectFlags())
         variableHeader.mqtt_append(keepAlive)
+        if protocolVersion == .v500 {
+            var properties = Data()
+            if let sessionExpiryInterval = connectProperties?.sessionExpiryInterval {
+                properties.mqtt_append(UInt8(0x11))
+                properties.mqtt_append(sessionExpiryInterval)
+            }
+            if let receiveMaximum = connectProperties?.receiveMaximum {
+                properties.mqtt_append(UInt8(0x21))
+                properties.mqtt_append(receiveMaximum)
+            }
+            if let maximumPacketSize = connectProperties?.maximumPacketSize {
+                properties.mqtt_append(UInt8(0x27))
+                properties.mqtt_append(maximumPacketSize)
+            }
+            if let topicAliasMaximum = connectProperties?.topicAliasMaximum {
+                properties.mqtt_append(UInt8(0x22))
+                properties.mqtt_append(topicAliasMaximum)
+            }
+            variableHeader.mqtt_appendVariableInteger(properties.count)
+            variableHeader.append(properties)
+        }
         return variableHeader
     }
     
@@ -69,6 +98,9 @@ class MQTTConnectPacket: MQTTPacket {
         payload.mqtt_append(clientID)
         
         if let message = lastWillMessage {
+            if protocolVersion == .v500 {
+                payload.mqtt_appendVariableInteger(0) // Will properties
+            }
             payload.mqtt_append(message.topic)
             payload.mqtt_append(message.payload)
         }
